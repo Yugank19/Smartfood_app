@@ -1,0 +1,9 @@
+{
+  "short_name": "LivingNetwork",
+  "name": "The Living Network - Smart Food Redistribution",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#002D20",
+  "background_color": "#ffffff"
+}
