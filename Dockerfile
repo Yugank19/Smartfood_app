@@ -1,5 +1,5 @@
 # Build stage
-FROM maven:3.8.4-openjdk-17 AS build
+FROM maven:3.8.5-openjdk-17 AS build
 WORKDIR /app
 # Copy the backend source code
 COPY backEnd/pom.xml ./
@@ -8,7 +8,7 @@ COPY backEnd/src ./src
 RUN mvn clean package -DskipTests
 
 # Run stage
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
