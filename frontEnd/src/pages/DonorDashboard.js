@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import LocationPicker from '../components/LocationPicker';
@@ -33,10 +34,10 @@ const DonorDashboard = () => {
     const fetchData = useCallback(async () => {
         try {
             const [statsRes, listingsRes, profileRes, activePickupsRes] = await Promise.all([
-                axios.get('http://localhost:8080/api/food/my-stats', authHeader),
-                axios.get('http://localhost:8080/api/food/my-listings', authHeader),
-                axios.get('http://localhost:8080/api/profile', authHeader),
-                axios.get('http://localhost:8080/api/pickups/donor-active', authHeader),
+                axios.get(`${API_BASE_URL}/api/food/my-stats`, authHeader),
+                axios.get(`${API_BASE_URL}/api/food/my-listings`, authHeader),
+                axios.get(`${API_BASE_URL}/api/profile`, authHeader),
+                axios.get(`${API_BASE_URL}/api/pickups/donor-active`, authHeader),
             ]);
             setStats(statsRes.data);
             
@@ -107,7 +108,7 @@ const DonorDashboard = () => {
                 latitude: postLocation.lat,
                 longitude: postLocation.lng,
             };
-            const res = await axios.post('http://localhost:8080/api/food/list', payload, authHeader);
+            const res = await axios.post(`${API_BASE_URL}/api/food/list`, payload, authHeader);
             const listingId = res.data.id;
 
             // Upload images if any
@@ -115,7 +116,7 @@ const DonorDashboard = () => {
                 setPostMsg('Uploading images...');
                 const formData = new FormData();
                 selectedFiles.forEach(file => formData.append('images', file));
-                await axios.post(`http://localhost:8080/api/images/food-listing/${listingId}/multiple`, formData, {
+                await axios.post(`${API_BASE_URL}/api/images/food-listing/${listingId}/multiple`, formData, {
                     headers: { ...authHeader.headers, 'Content-Type': 'multipart/form-data' }
                 });
             }
@@ -170,7 +171,7 @@ const DonorDashboard = () => {
                 payload.longitude = String(finalLng);
             }
 
-            const res = await axios.patch('http://localhost:8080/api/profile', payload, authHeader);
+            const res = await axios.patch(`${API_BASE_URL}/api/profile`, payload, authHeader);
             setProfile(res.data);
             setProfileMsg('✓ Profile saved!');
             fetchData();
@@ -183,7 +184,7 @@ const DonorDashboard = () => {
         setSaving(true);
         try {
             await axios.patch(
-                `http://localhost:8080/api/pickups/${pickupId}/donor-confirm-delivery`,
+                `${API_BASE_URL}/api/pickups/${pickupId}/donor-confirm-delivery`,
                 { note: deliveryNote },
                 authHeader
             );

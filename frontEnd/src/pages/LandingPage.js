@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
@@ -6,7 +6,7 @@ const LandingPage = () => {
     const [publicStats, setPublicStats] = useState({ totalMealsSaved: null, activeDonors: null });
 
     useEffect(() => {
-        axios.get('http://localhost:8080/api/analytics/public')
+        axios.get(`${API_BASE_URL}/api/analytics/public`)
             .then(res => setPublicStats(res.data))
             .catch(() => {});
     }, []);

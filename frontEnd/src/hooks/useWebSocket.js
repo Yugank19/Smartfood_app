@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
@@ -13,7 +14,7 @@ const useWebSocket = (topics = [], onMessage) => {
 
     const connect = useCallback(() => {
         const client = new Client({
-            webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+            webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws`),
             reconnectDelay: 5000,
             onConnect: () => {
                 topics.forEach(topic => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -38,7 +38,7 @@ const RouteOptimizer = ({ token, onClose }) => {
     const fetchRoute = (lat, lng) => {
         setLoading(true);
         setError('');
-        axios.get(`http://localhost:8080/api/pickups/my-optimized-route?lat=${lat}&lng=${lng}`, authHeader)
+        axios.get(`${API_BASE_URL}/api/pickups/my-optimized-route?lat=${lat}&lng=${lng}`, authHeader)
             .then(res => { setRoute(res.data); setLoading(false); })
             .catch(err => { setError('Could not load route.'); setLoading(false); });
     };

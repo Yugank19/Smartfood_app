@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import RouteMap from '../components/RouteMap';
@@ -23,8 +23,8 @@ const VolunteerDashboard = () => {
     const fetchData = useCallback(async () => {
         try {
             const [availRes, assignRes] = await Promise.all([
-                axios.get('http://localhost:8080/api/pickups/available', authHeader),
-                axios.get('http://localhost:8080/api/pickups/my-assignments', authHeader)
+                axios.get(`${API_BASE_URL}/api/pickups/available`, authHeader),
+                axios.get(`${API_BASE_URL}/api/pickups/my-assignments`, authHeader)
             ]);
             setAvailablePickups(availRes.data);
             setMyAssignments(assignRes.data);
@@ -41,7 +41,7 @@ const VolunteerDashboard = () => {
 
     const handleAccept = async (id) => {
         try {
-            await axios.post(`http://localhost:8080/api/pickups/${id}/accept`, {}, authHeader);
+            await axios.post(`${API_BASE_URL}/api/pickups/${id}/accept`, {}, authHeader);
             showMsg('✓ Task accepted! Check your assignments.');
             fetchData();
         } catch (err) {
@@ -51,7 +51,7 @@ const VolunteerDashboard = () => {
 
     const handleStatus = async (id, status) => {
         try {
-            await axios.patch(`http://localhost:8080/api/pickups/${id}/status`, { status }, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/pickups/${id}/status`, { status }, authHeader);
             showMsg(`✓ Status updated to ${status.replace('_', ' ')}.`);
             fetchData();
         } catch (err) {

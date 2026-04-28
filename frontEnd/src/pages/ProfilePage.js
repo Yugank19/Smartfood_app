@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
@@ -56,7 +56,7 @@ const ProfilePage = () => {
 
     const fetchProfile = useCallback(async () => {
         try {
-            const res = await axios.get('http://localhost:8080/api/profile/me/full', authHeader);
+            const res = await axios.get(`${API_BASE_URL}/api/profile/me/full`, authHeader);
             setProfile(res.data);
             setEditForm({ fullName: res.data.fullName || '', organizationName: res.data.organizationName || '' });
         } catch (err) {
@@ -69,7 +69,7 @@ const ProfilePage = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await axios.patch('http://localhost:8080/api/profile', editForm, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/profile`, editForm, authHeader);
             setMsg('✓ Profile updated!');
             setEditMode(false);
             fetchProfile();

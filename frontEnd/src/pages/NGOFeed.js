@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import FoodMap from '../components/FoodMap';
@@ -71,14 +71,14 @@ const NGOFeed = () => {
 
     const fetchData = useCallback(async (userLat, userLng, radius) => {
         try {
-            let nearbyUrl = 'http://localhost:8080/api/food/nearby';
+            let nearbyUrl = `${API_BASE_URL}/api/food/nearby`;
             if (userLat && userLng && radius) {
                 nearbyUrl += `?lat=${userLat}&lng=${userLng}&radius=${radius}`;
             }
 
             const [listingsRes, requestsRes] = await Promise.all([
                 axios.get(nearbyUrl, authHeader),
-                axios.get('http://localhost:8080/api/pickups/my-requests', authHeader)
+                axios.get(`${API_BASE_URL}/api/pickups/my-requests`, authHeader)
             ]);
             const raw = listingsRes.data;
             // Immediate frontend filter for expiry to ensure "disappear" requirement
@@ -178,7 +178,7 @@ const NGOFeed = () => {
 
     const handleClaim = async (id) => {
         try {
-            await axios.patch(`http://localhost:8080/api/food/${id}/claim`, {}, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/food/${id}/claim`, {}, authHeader);
             setMessage('✓ Donation claimed! A pickup request has been created.');
             setTimeout(() => setMessage(''), 5000);
             setActiveView('requests'); // Switch to requests view
@@ -191,7 +191,7 @@ const NGOFeed = () => {
 
     const handleReject = async (pickupId) => {
         try {
-            await axios.patch(`http://localhost:8080/api/pickups/${pickupId}/reject`, {}, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/pickups/${pickupId}/reject`, {}, authHeader);
             setMessage('Request rejected. The listing is now available for other NGOs.');
             setTimeout(() => setMessage(''), 5000);
             fetchData(userCoords.lat, userCoords.lng, selectedRadius);
@@ -927,7 +927,12 @@ const NGOFeed = () => {
                                         const l = selectedDetailListing;
                                         setSelectedDetailListing(null);
                                         if (l.latitude && l.longitude) {
-                                            setSelectedListing(l); // Trigger map route
+                                            setRouteTarget({
+                                                lat: l.latitude,
+                                                lng: l.longitude,
+                                                donorName: l.donor?.fullName || 'Donor',
+                                                foodType: l.foodType
+                                            });
                                         }
                                     }}
                                     className="px-6 rounded-2xl border-2 border-primary text-primary font-bold hover:bg-primary/5 transition-colors"

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from './config';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import LandingPage from './pages/LandingPage';
@@ -46,7 +47,7 @@ const UserMenu = ({ userPhone, userRole, onLogout }) => {
     useEffect(() => {
         const token = sessionStorage.getItem('token');
         if (token && userPhone) {
-            axios.get('http://localhost:8080/api/profile', {
+            axios.get(`${API_BASE_URL}/api/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             }).then(r => setProfile(r.data)).catch(() => {});
         }

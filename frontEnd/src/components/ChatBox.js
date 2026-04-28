@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
@@ -41,20 +41,20 @@ const ChatBox = ({ pickupId, currentUserPhone, currentUserRole, onClose }) => {
             try {
                 setError('');
                 const roomRes = await axios.get(
-                    `http://localhost:8080/api/chat/room/${pickupId}`, authHeader
+                    `${API_BASE_URL}/api/chat/room/${pickupId}`, authHeader
                 );
                 const rid = roomRes.data.roomId;
                 setRoomId(rid);
 
                 const msgRes = await axios.get(
-                    `http://localhost:8080/api/chat/messages/${rid}`, authHeader
+                    `${API_BASE_URL}/api/chat/messages/${rid}`, authHeader
                 );
                 setMessages((msgRes.data || []).map(normalizeMsg));
                 setLoading(false);
 
                 // Connect WebSocket for live messages
                 const client = new Client({
-                    webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+                    webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws`),
                     reconnectDelay: 5000,
                     onConnect: () => {
                         client.subscribe(`/topic/chat/${rid}`, (frame) => {
@@ -107,7 +107,7 @@ const ChatBox = ({ pickupId, currentUserPhone, currentUserRole, onClose }) => {
         setNewMessage('');
         try {
             const res = await axios.post(
-                `http://localhost:8080/api/chat/send/${roomId}`,
+                `${API_BASE_URL}/api/chat/send/${roomId}`,
                 { message: text },
                 authHeader
             );

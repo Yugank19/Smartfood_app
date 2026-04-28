@@ -14,6 +14,7 @@ echo     Port 8080 is free.
 
 echo.
 echo [1/2] Starting Spring Boot Backend (Supabase PostgreSQL)...
+if exist secrets.bat call secrets.bat
 start "MealBridge Backend" cmd /k "cd /d %~dp0backEnd && mvn spring-boot:run"
 
 echo.

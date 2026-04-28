@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { supabase } from '../supabase';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 
 /**
@@ -34,7 +33,7 @@ const useSupabaseOtp = () => {
         setError('');
         try {
             const normalizedPhone = normalize(phone);
-            const res = await axios.post('http://localhost:8080/api/auth/supabase/send-otp', {
+            const res = await axios.post(`${API_BASE_URL}/api/auth/supabase/send-otp`, {
                 phone: normalizedPhone
             });
             const data = res.data;
@@ -65,7 +64,7 @@ const useSupabaseOtp = () => {
 
 
             // Backend OTP verification (works for ALL numbers)
-            const res = await axios.post('http://localhost:8080/api/auth/supabase/verify-otp', {
+            const res = await axios.post(`${API_BASE_URL}/api/auth/supabase/verify-otp`, {
                 phone: normalizedPhone,
                 token: token.trim()
             });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../config';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AdvancedAnalytics from '../components/AdvancedAnalytics';
@@ -20,11 +20,11 @@ const AdminDashboard = () => {
     const fetchData = useCallback(async () => {
         try {
             const [analyticsRes, usersRes, activityRes, listingsRes, pickupsRes] = await Promise.all([
-                axios.get('http://localhost:8080/api/admin/analytics', authHeader),
-                axios.get('http://localhost:8080/api/admin/users', authHeader),
-                axios.get('http://localhost:8080/api/admin/activity', authHeader),
-                axios.get('http://localhost:8080/api/admin/listings', authHeader),
-                axios.get('http://localhost:8080/api/admin/pickups', authHeader),
+                axios.get(`${API_BASE_URL}/api/admin/analytics`, authHeader),
+                axios.get(`${API_BASE_URL}/api/admin/users`, authHeader),
+                axios.get(`${API_BASE_URL}/api/admin/activity`, authHeader),
+                axios.get(`${API_BASE_URL}/api/admin/listings`, authHeader),
+                axios.get(`${API_BASE_URL}/api/admin/pickups`, authHeader),
             ]);
             setAnalytics(analyticsRes.data);
             setUsers(usersRes.data);
@@ -44,7 +44,7 @@ const AdminDashboard = () => {
 
     const handleUserStatus = async (userId, status) => {
         try {
-            await axios.patch(`http://localhost:8080/api/admin/users/${userId}/status`, { status }, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/admin/users/${userId}/status`, { status }, authHeader);
             showMsg(`✓ User status updated to ${status}.`);
             fetchData();
         } catch (err) {
@@ -54,7 +54,7 @@ const AdminDashboard = () => {
 
     const handleVerifyOrg = async (userId) => {
         try {
-            await axios.patch(`http://localhost:8080/api/admin/users/${userId}/verify`, { notes: 'Verified by admin' }, authHeader);
+            await axios.patch(`${API_BASE_URL}/api/admin/users/${userId}/verify`, { notes: 'Verified by admin' }, authHeader);
             showMsg('✓ Organization verified successfully.');
             fetchData();
         } catch (err) {

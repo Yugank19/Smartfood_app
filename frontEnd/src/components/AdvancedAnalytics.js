@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 
 /**
@@ -11,7 +11,7 @@ const AdvancedAnalytics = ({ token }) => {
     const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
     useEffect(() => {
-        axios.get('http://localhost:8080/api/admin/analytics/advanced', authHeader)
+        axios.get(`${API_BASE_URL}/api/admin/analytics/advanced`, authHeader)
             .then(res => { setData(res.data); setLoading(false); })
             .catch(() => setLoading(false));
     }, []);

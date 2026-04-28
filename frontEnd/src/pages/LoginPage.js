@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -23,7 +23,7 @@ const LoginPage = () => {
         try {
             // Normalize phone: keep last 10 digits
             const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
-            const response = await axios.post('http://localhost:8080/api/auth/login', {
+            const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
                 phone: normalizedPhone, pin
             });
             sessionStorage.setItem('token', response.data.token);

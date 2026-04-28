@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import useSupabaseOtp from '../hooks/useSupabaseOtp';
@@ -111,10 +111,10 @@ const RegisterPage = () => {
         setError('');
         try {
             const normalizedPhone = supabaseOtp.normalize(phone);
-            await axios.post('http://localhost:8080/api/auth/register', {
+            await axios.post(`${API_BASE_URL}/api/auth/register`, {
                 phone: normalizedPhone, ...profile, pin
             });
-            const loginRes = await axios.post('http://localhost:8080/api/auth/login', {
+            const loginRes = await axios.post(`${API_BASE_URL}/api/auth/login`, {
                 phone: normalizedPhone, pin
             });
             sessionStorage.setItem('token', loginRes.data.token);
