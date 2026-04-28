@@ -1,5 +1,6 @@
 package com.myanatomy.sandboxpro.controller;
 
+import com.myanatomy.sandboxpro.dto.CreateListingRequest;
 import com.myanatomy.sandboxpro.dto.DonorStatsDTO;
 import com.myanatomy.sandboxpro.model.FoodListing;
 import com.myanatomy.sandboxpro.model.User;
@@ -32,9 +33,9 @@ public class FoodController {
     private UserRepository userRepository;
 
     @PostMapping("/list")
-    public ResponseEntity<FoodListing> createListing(@RequestBody FoodListing listing) {
+    public ResponseEntity<FoodListing> createListing(@RequestBody CreateListingRequest request) {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
-        return ResponseEntity.ok(foodService.createListing(listing, phone));
+        return ResponseEntity.ok(foodService.createListing(request.toEntity(), phone));
     }
 
     @GetMapping("/available")
@@ -118,10 +119,43 @@ public class FoodController {
     public ResponseEntity<DonorStatsDTO> getMyStats() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         long mealsShared = foodListingRepository.countByDonorPhoneAndStatus(phone, FoodListing.ListingStatus.DELIVERED);
-        long activeListings = foodListingRepository.countByDonorPhoneAndStatus(phone, FoodListing.ListingStatus.AVAILABLE);
+        
+        // Active = AVAILABLE AND not expired
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        long activeListings = foodListingRepository.findAll().stream()
+                .filter(l -> l.getDonor().getPhone().equals(phone))
+                .filter(l -> l.getStatus() == FoodListing.ListingStatus.AVAILABLE)
+                .filter(l -> l.getExpiryTime().isAfter(now))
+                .count();
+                
         long totalListings = foodListingRepository.countByDonorPhone(phone);
         double co2 = Math.round(mealsShared * 0.0004 * 100.0) / 100.0;
         return ResponseEntity.ok(new DonorStatsDTO(mealsShared, activeListings, totalListings, co2));
+    }
+
+    /**
+     * Feature 7: Animal Feed Flow — listings for ANIMAL_CARE role.
+     * Returns NON_EDIBLE food listings for animal care groups.
+     */
+    @GetMapping("/animal-feed")
+    public ResponseEntity<List<FoodListing>> getAnimalFeedListings() {
+        List<FoodListing> listings = foodService.getAvailableListings().stream()
+                .filter(l -> l.getFoodCategory() == FoodListing.FoodCategory.NON_EDIBLE)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(listings);
+    }
+
+    /**
+     * Feature 2: Pickup time slot — get listings with active pickup windows.
+     */
+    @GetMapping("/with-timeslot")
+    public ResponseEntity<List<FoodListing>> getListingsWithTimeSlot() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        List<FoodListing> listings = foodService.getAvailableListings().stream()
+                .filter(l -> l.getPickupStartTime() != null && l.getPickupEndTime() != null)
+                .filter(l -> l.getPickupEndTime().isAfter(now))
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(listings);
     }
 
     /**

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import useFirebaseOtp from '../hooks/useFirebaseOtp';
 
 /**
  * LoginPage — Phone + PIN login.
- * Firebase is NOT used for login (only for registration verification).
+ * Supabase Auth is used for registration OTP verification only.
  * Login uses phone + PIN directly against our backend.
  */
 const LoginPage = () => {
@@ -27,9 +26,9 @@ const LoginPage = () => {
             const response = await axios.post('http://localhost:8080/api/auth/login', {
                 phone: normalizedPhone, pin
             });
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('role', response.data.role);
-            localStorage.setItem('phone', response.data.phone);
+            sessionStorage.setItem('token', response.data.token);
+            sessionStorage.setItem('role', response.data.role);
+            sessionStorage.setItem('phone', response.data.phone);
             const role = response.data.role;
             if (role === 'ROLE_DONOR') navigate('/donor');
             else if (role === 'ROLE_NGO') navigate('/ngo');
@@ -153,14 +152,14 @@ const LoginPage = () => {
 
                     <div className="flex items-center justify-center gap-3 py-3 px-4 bg-surface-container-lowest border border-outline-variant/10 rounded-xl">
                         <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-                        <span className="text-sm font-medium text-on-surface-variant">PIN-protected · Firebase verified · SSL encrypted</span>
+                        <span className="text-sm font-medium text-on-surface-variant">PIN-protected · Supabase verified · SSL encrypted</span>
                     </div>
 
                     <footer className="mt-12 text-center">
                         <p className="text-on-surface-variant font-medium">
                             Don't have an account?{' '}
                             <Link to="/register" className="text-secondary font-bold hover:underline ml-1" style={{ textDecoration: 'none' }}>
-                                Register with Firebase OTP
+                                Register with Supabase OTP
                             </Link>
                         </p>
                     </footer>

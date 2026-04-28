@@ -2,13 +2,19 @@ package com.myanatomy.sandboxpro.controller;
 
 import com.myanatomy.sandboxpro.dto.PickupRequestDTO;
 import com.myanatomy.sandboxpro.dto.UpdateStatusRequest;
+import com.myanatomy.sandboxpro.model.DeliveryLog;
 import com.myanatomy.sandboxpro.model.PickupRequest;
+import com.myanatomy.sandboxpro.repository.DeliveryLogRepository;
+import com.myanatomy.sandboxpro.repository.FoodListingRepository;
 import com.myanatomy.sandboxpro.repository.PickupRequestRepository;
 import com.myanatomy.sandboxpro.service.NotificationService;
 import com.myanatomy.sandboxpro.service.PickupService;
+import com.myanatomy.sandboxpro.service.RouteOptimizationService;
+import com.myanatomy.sandboxpro.service.TrustScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,7 +32,19 @@ public class PickupController {
     private PickupRequestRepository pickupRequestRepository;
 
     @Autowired
+    private DeliveryLogRepository deliveryLogRepository;
+
+    @Autowired
+    private FoodListingRepository foodListingRepository;
+
+    @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private RouteOptimizationService routeOptimizationService;
+
+    @Autowired
+    private TrustScoreService trustScoreService;
 
     // ── VOLUNTEER endpoints ──────────────────────────────────────────────────
 
@@ -40,6 +58,17 @@ public class PickupController {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         PickupRequest pickup = pickupService.acceptPickup(id, phone);
         return ResponseEntity.ok(PickupRequestDTO.from(pickup));
+    }
+
+    /**
+     * Feature 8: Route Optimization — get optimized multi-pickup route for volunteer.
+     */
+    @GetMapping("/my-optimized-route")
+    public ResponseEntity<?> getOptimizedRoute(
+            @RequestParam double lat,
+            @RequestParam double lng) {
+        String phone = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ResponseEntity.ok(routeOptimizationService.getOptimizedRoute(phone, lat, lng));
     }
 
     @GetMapping("/my-assignments")
@@ -63,6 +92,7 @@ public class PickupController {
      * Returns all pickup requests for the logged-in NGO (active ones first).
      */
     @GetMapping("/my-requests")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<PickupRequestDTO>> getMyRequests() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         List<PickupRequestDTO> requests = pickupRequestRepository.findByNgoPhone(phone)
@@ -76,6 +106,7 @@ public class PickupController {
      * Returns only active (non-delivered) pickup requests for the logged-in NGO.
      */
     @GetMapping("/my-active-requests")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<PickupRequestDTO>> getMyActiveRequests() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         List<PickupRequestDTO> requests = pickupRequestRepository.findActiveByNgoPhone(phone)
@@ -92,6 +123,7 @@ public class PickupController {
      * Notifies NGO and volunteer.
      */
     @PatchMapping("/{id}/donor-confirm-delivery")
+    @Transactional
     public ResponseEntity<?> donorConfirmDelivery(
             @PathVariable Long id,
             @RequestBody(required = false) java.util.Map<String, String> body) {
@@ -99,42 +131,45 @@ public class PickupController {
         PickupRequest pickup = pickupRequestRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Pickup request not found"));
 
-        // Verify this donor owns the food listing
         if (!pickup.getFoodListing().getDonor().getPhone().equals(phone)) {
             return ResponseEntity.status(403).body(java.util.Map.of("message", "Not your listing"));
         }
-
-        // Allow confirmation from ASSIGNED or PICKED_UP state
         if (pickup.getStatus() == PickupRequest.Status.DELIVERED) {
             return ResponseEntity.badRequest().body(java.util.Map.of("message", "Already marked as delivered"));
         }
-        if (pickup.getStatus() == PickupRequest.Status.PENDING) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("message", "Food has not been picked up yet"));
-        }
+        // Allow donor to confirm delivery from any active state:
+        // PENDING = NGO claimed but no volunteer yet (direct handoff)
+        // ASSIGNED = volunteer assigned but not yet picked up
+        // PICKED_UP = volunteer has picked up, in transit
+        // All these mean food is physically with the NGO or en route — donor can confirm
 
         PickupRequest.Status previousStatus = pickup.getStatus();
 
-        // Mark delivered
+        // Mark pickup delivered
         pickup.setStatus(PickupRequest.Status.DELIVERED);
+
+        // Mark food listing delivered and save it
         com.myanatomy.sandboxpro.model.FoodListing listing = pickup.getFoodListing();
         listing.setStatus(com.myanatomy.sandboxpro.model.FoodListing.ListingStatus.DELIVERED);
+        foodListingRepository.save(listing);
 
         pickupRequestRepository.save(pickup);
 
         // Save delivery log
-        com.myanatomy.sandboxpro.model.DeliveryLog log = new com.myanatomy.sandboxpro.model.DeliveryLog();
+        DeliveryLog log = new DeliveryLog();
         log.setPickupRequest(pickup);
         log.setPreviousStatus(previousStatus);
         log.setNewStatus(PickupRequest.Status.DELIVERED);
-        // changedBy = donor (load donor user)
-        com.myanatomy.sandboxpro.model.User donor = pickup.getFoodListing().getDonor();
-        log.setChangedBy(donor);
+        log.setChangedBy(listing.getDonor());
         log.setTimestamp(java.time.LocalDateTime.now());
+        deliveryLogRepository.save(log);
 
-        // Add delivery note if provided
+        // Update trust score for donor
+        trustScoreService.recordDelivery(listing.getDonor());
+
         String note = body != null ? body.getOrDefault("note", "") : "";
+        com.myanatomy.sandboxpro.model.User donor = listing.getDonor();
 
-        // Notify NGO and volunteer
         java.util.Map<String, Object> notif = java.util.Map.of(
             "type", "DELIVERED",
             "pickupId", pickup.getId(),
@@ -159,12 +194,10 @@ public class PickupController {
      * (food that has been claimed and is in progress).
      */
     @GetMapping("/donor-active")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<PickupRequestDTO>> getDonorActivePickups() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<PickupRequestDTO> active = pickupRequestRepository.findAll().stream()
-                .filter(pr -> pr.getFoodListing().getDonor().getPhone().equals(phone))
-                .filter(pr -> pr.getStatus() != PickupRequest.Status.DELIVERED)
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+        List<PickupRequestDTO> active = pickupRequestRepository.findActiveByDonorPhone(phone).stream()
                 .map(PickupRequestDTO::from)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(active);
@@ -174,11 +207,11 @@ public class PickupController {
      * Get all completed deliveries for the logged-in donor.
      */
     @GetMapping("/donor-history")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<PickupRequestDTO>> getDonorHistory() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<PickupRequestDTO> history = pickupRequestRepository.findAll().stream()
-                .filter(pr -> pr.getFoodListing().getDonor().getPhone().equals(phone))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+        List<PickupRequestDTO> history = pickupRequestRepository.findAllByDonorPhone(phone)
+                .stream()
                 .map(PickupRequestDTO::from)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(history);
@@ -189,6 +222,7 @@ public class PickupController {
      * This cancels the pickup request and marks the food listing back to AVAILABLE.
      */
     @PatchMapping("/{id}/reject")
+    @Transactional
     public ResponseEntity<?> rejectPickup(@PathVariable Long id) {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         PickupRequest pickup = pickupRequestRepository.findById(id)
@@ -204,6 +238,8 @@ public class PickupController {
         // Revert food listing to AVAILABLE so other NGOs can claim it
         com.myanatomy.sandboxpro.model.FoodListing listing = pickup.getFoodListing();
         listing.setStatus(com.myanatomy.sandboxpro.model.FoodListing.ListingStatus.AVAILABLE);
+        foodListingRepository.save(listing);  // BUG FIX: was missing this save
+
         pickupRequestRepository.delete(pickup);
 
         return ResponseEntity.ok(java.util.Map.of("message", "Request rejected. Listing is now available again."));

@@ -77,7 +77,7 @@ const LocationPicker = ({ initialLat, initialLng, initialAddress = '', onLocatio
         try {
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-                { headers: { 'Accept-Language': 'en', 'User-Agent': 'HarvestLink/1.0' } }
+                { headers: { 'Accept-Language': 'en', 'User-Agent': 'MealBridge/1.0' } }
             );
             const data = await res.json();
             if (data && data.display_name) {
@@ -95,7 +95,7 @@ const LocationPicker = ({ initialLat, initialLng, initialAddress = '', onLocatio
             const encoded = encodeURIComponent(query);
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=6&addressdetails=1`,
-                { headers: { 'Accept-Language': 'en', 'User-Agent': 'HarvestLink/1.0' } }
+                { headers: { 'Accept-Language': 'en', 'User-Agent': 'MealBridge/1.0' } }
             );
             const data = await res.json();
             setSuggestions(data || []);

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
 
@@ -24,8 +25,8 @@ public class User {
     @Column(nullable = false, unique = true)
     private String phone;
 
-    // PIN stored as BCrypt hash
     @Column(nullable = true)
+    @JsonIgnore
     private String pin;
 
     @Enumerated(EnumType.STRING)
@@ -39,21 +40,26 @@ public class User {
     private String organizationName;
     private String address;
 
-    // Geocoded coordinates from address (stored so food listings inherit them)
     private Double latitude;
     private Double longitude;
 
-    // Donor verification status (PDF requirement: only verified donors can post food)
     private boolean organizationVerified = false;
     private String verificationNotes;
 
     @Column(name = "is_phone_verified", nullable = false)
     private boolean phoneVerified = false;
 
+    // Feature 6: Trust Score System
+    private Double trustScore = 5.0;          // composite score 0-10
+    private Integer totalDeliveries = 0;
+    private Integer totalCancellations = 0;
+    private Integer totalRatings = 0;
+    private Double averageRating = 0.0;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum Role {
-        DONOR, NGO, VOLUNTEER, ADMIN
+        DONOR, NGO, VOLUNTEER, ADMIN, ANIMAL_CARE  // Feature 7: Animal Care role
     }
 
     public enum Status {

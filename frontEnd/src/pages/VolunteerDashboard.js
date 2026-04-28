@@ -2,16 +2,22 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import RouteMap from '../components/RouteMap';
+import RouteOptimizer from '../components/RouteOptimizer';
+import ChatBox from '../components/ChatBox';
 
 const VolunteerDashboard = () => {
     const [availablePickups, setAvailablePickups] = useState([]);
     const [myAssignments, setMyAssignments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
+    const [selectedImageSet, setSelectedImageSet] = useState(null); // For viewing photos
+    const [selectedDetailListing, setSelectedDetailListing] = useState(null); // Full details
     const [routeTarget, setRouteTarget] = useState(null);
+    const [showRouteOptimizer, setShowRouteOptimizer] = useState(false); // Feature 8
+    const [chatPickupId, setChatPickupId] = useState(null); // Feature 4
     const navigate = useNavigate();
 
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
     const fetchData = useCallback(async () => {
@@ -24,7 +30,7 @@ const VolunteerDashboard = () => {
             setMyAssignments(assignRes.data);
         } catch (err) {
             if (err.response?.status === 401 || err.response?.status === 403) {
-                localStorage.clear(); navigate('/login');
+                sessionStorage.clear(); navigate('/login');
             }
         } finally { setLoading(false); }
     }, [token]);
@@ -74,6 +80,19 @@ const VolunteerDashboard = () => {
                     onClose={() => setRouteTarget(null)}
                 />
             )}
+            {/* Feature 8: Route Optimizer */}
+            {showRouteOptimizer && (
+                <RouteOptimizer token={token} onClose={() => setShowRouteOptimizer(false)} />
+            )}
+            {/* Feature 4: Chat */}
+            {chatPickupId && (
+                <ChatBox
+                    pickupId={chatPickupId}
+                    currentUserPhone={sessionStorage.getItem('phone')}
+                    currentUserRole="VOLUNTEER"
+                    onClose={() => setChatPickupId(null)}
+                />
+            )}
             {/* Sidebar */}
             <aside className="w-72 sidebar min-h-screen p-8 hidden lg:block">
                 <div className="flex items-center gap-3 mb-12">
@@ -84,6 +103,9 @@ const VolunteerDashboard = () => {
                 </div>
                 <nav className="space-y-2">
                     <div className="nav-item-active p-3 px-6 cursor-pointer">Live Tasks</div>
+                    <div onClick={() => setShowRouteOptimizer(true)} className="p-3 px-6 text-on-surface-variant hover:text-primary cursor-pointer transition-colors font-medium">
+                        🗺 Optimize Route
+                    </div>
                     <Link to="/" className="block p-3 px-6 text-on-surface-variant hover:text-primary cursor-pointer transition-colors font-medium" style={{ textDecoration: 'none' }}>Home</Link>
                 </nav>
                 <div className="mt-auto pt-10">
@@ -133,6 +155,25 @@ const VolunteerDashboard = () => {
                                 <div className="text-center py-12 text-on-surface-variant">Loading...</div>
                             ) : activeTask ? (
                                 <div className="flex flex-col md:flex-row gap-8 items-center bg-surface p-8 rounded-3xl border border-outline-variant/10">
+                                    <div className="w-full md:w-48 h-48 rounded-2xl bg-surface-container-low overflow-hidden relative shadow-md">
+                                        {activeTask.imageUrls && activeTask.imageUrls.length > 0 ? (
+                                            <>
+                                                <img 
+                                                    src={activeTask.imageUrls[0]} 
+                                                    alt="Food" 
+                                                    className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" 
+                                                    onClick={() => setSelectedImageSet(activeTask.imageUrls)}
+                                                />
+                                                {activeTask.imageUrls.length > 1 && (
+                                                    <div className="absolute bottom-0 right-0 bg-primary/80 text-white text-xs font-bold px-2 py-1 rounded-tl-xl">
+                                                        +{activeTask.imageUrls.length - 1}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">🍽</div>
+                                        )}
+                                    </div>
                                     <div className="flex-1 space-y-6 w-full">
                                         <div className="flex items-start gap-4">
                                             <div className="w-2 h-2 rounded-full bg-secondary mt-2" />
@@ -220,13 +261,43 @@ const VolunteerDashboard = () => {
                                 <div className="space-y-4">
                                     {availablePickups.map(pickup => (
                                         <div key={pickup.id} className="p-4 rounded-2xl bg-white/10 hover:bg-white/15 transition-colors">
-                                            <div className="flex justify-between mb-2">
-                                                <span className="text-[10px] font-bold text-secondary-container tracking-widest uppercase">AVAILABLE</span>
-                                                <span className="text-[10px] font-bold opacity-60">#{pickup.id}</span>
+                                            <div className="flex gap-3 mb-3">
+                                                <div className="w-16 h-16 rounded-xl bg-white/10 overflow-hidden shrink-0 relative">
+                                                    {pickup.imageUrls && pickup.imageUrls.length > 0 ? (
+                                                         <>
+                                                             <img 
+                                                                 src={pickup.imageUrls[0]} 
+                                                                 alt="Food" 
+                                                                 className="w-full h-full object-cover cursor-pointer" 
+                                                                 onClick={() => setSelectedImageSet(pickup.imageUrls)}
+                                                             />
+                                                             {pickup.imageUrls.length > 1 && (
+                                                                 <div className="absolute bottom-0 right-0 bg-primary/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-tl-lg">
+                                                                     +{pickup.imageUrls.length - 1}
+                                                                 </div>
+                                                             )}
+                                                         </>
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-xl opacity-20">🍽</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="text-[10px] font-bold text-secondary-container tracking-widest uppercase">AVAILABLE</span>
+                                                        <span className="text-[10px] font-bold opacity-40">#{pickup.id}</span>
+                                                    </div>
+                                                    <p className="font-bold text-sm truncate">{pickup.foodType}</p>
+                                                    <p className="text-[10px] opacity-70 truncate">{pickup.quantity}</p>
+                                                </div>
                                             </div>
-                                            <p className="font-bold text-sm mb-1">{pickup.foodType}</p>
-                                            <p className="text-xs opacity-70 mb-3">{pickup.quantity} · {pickup.location}</p>
+                                            <p className="text-xs opacity-70 mb-1">📍 {pickup.location}</p>
                                             <p className="text-xs opacity-70 mb-3">For: {pickup.ngoName}</p>
+                                            <button
+                                                onClick={() => setSelectedDetailListing(pickup)}
+                                                className="w-full bg-white/10 text-white font-extrabold text-[10px] py-2 rounded-xl mb-1 hover:bg-white/20 transition-colors"
+                                            >
+                                                View Details
+                                            </button>
                                             <button
                                                 onClick={() => handleAccept(pickup.id)}
                                                 className="w-full bg-secondary-container text-primary font-extrabold text-xs py-2 rounded-xl hover:scale-105 transition-transform"
@@ -254,6 +325,112 @@ const VolunteerDashboard = () => {
                     </div>
                 </div>
             </main>
+            {/* Image Set Modal */}
+            {selectedImageSet && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md p-4" onClick={() => setSelectedImageSet(null)}>
+                    <div className="max-w-4xl w-full relative" onClick={e => e.stopPropagation()}>
+                        <button 
+                            className="absolute -top-12 right-0 text-white text-3xl font-bold p-2"
+                            onClick={() => setSelectedImageSet(null)}
+                        >
+                            ×
+                        </button>
+                        <div className="flex flex-wrap justify-center gap-4 max-h-[80vh] overflow-y-auto p-4">
+                            {selectedImageSet.map((url, i) => (
+                                <div key={i} className="rounded-2xl overflow-hidden shadow-2xl bg-white p-2">
+                                    <img src={url} alt={`Food ${i}`} className="max-w-full h-auto rounded-xl object-contain" style={{ maxHeight: '70vh' }} />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Listing Detail Modal */}
+            {selectedDetailListing && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedDetailListing(null)}>
+                    <div className="max-w-2xl w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="relative h-64 bg-slate-100">
+                            {selectedDetailListing.imageUrls && selectedDetailListing.imageUrls.length > 0 ? (
+                                <div className="flex h-full overflow-x-auto snap-x scrollbar-hide">
+                                    {selectedDetailListing.imageUrls.map((url, i) => (
+                                        <img key={i} src={url} alt={`Food ${i}`} className="h-full w-full object-cover shrink-0 snap-center" />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center text-6xl opacity-10">🍽</div>
+                            )}
+                            <button 
+                                onClick={() => setSelectedDetailListing(null)}
+                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center font-bold text-xl backdrop-blur-md"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        
+                        <div className="p-8">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-primary mb-1">{selectedDetailListing.foodType}</h2>
+                                    <p className="text-secondary font-bold">👤 NGO: {selectedDetailListing.ngoName}</p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-primary">📦 {selectedDetailListing.quantity}</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Donor Name</p>
+                                    <p className="text-sm font-bold">{selectedDetailListing.donorName}</p>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-red-50 border border-red-100">
+                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Expiry</p>
+                                    <p className="text-sm font-bold text-red-600">{new Date(selectedDetailListing.pickupEndTime).toLocaleString()}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                <div className="flex items-center gap-3 text-slate-600">
+                                    <span className="text-xl">📍</span>
+                                    <div>
+                                        <p className="text-xs font-bold opacity-50 uppercase tracking-tighter">Pickup Location</p>
+                                        <p className="text-sm font-medium">{selectedDetailListing.location}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => {
+                                        setSelectedDetailListing(null);
+                                        handleAccept(selectedDetailListing.id);
+                                    }}
+                                    className="flex-1 py-4 rounded-2xl impact-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform"
+                                >
+                                    Accept This Task →
+                                </button>
+                                {selectedDetailListing.latitude && (
+                                    <button 
+                                        onClick={() => {
+                                            const l = selectedDetailListing;
+                                            setSelectedDetailListing(null);
+                                            setRouteTarget({
+                                                lat: l.latitude,
+                                                lng: l.longitude,
+                                                donorName: l.donorName,
+                                                foodType: l.foodType
+                                            });
+                                        }}
+                                        className="px-6 rounded-2xl border-2 border-primary text-primary font-bold hover:bg-primary/5 transition-colors"
+                                    >
+                                        🗺 Route
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

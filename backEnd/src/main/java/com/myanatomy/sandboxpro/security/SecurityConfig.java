@@ -11,6 +11,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -24,30 +29,63 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Global CORS configuration — allows all origins, methods, and headers.
+     * This handles the preflight OPTIONS request before Spring Security filters run.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        // Must use explicit origins (not "*") when allowCredentials is true
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        // SockJS requires credentials=true; using allowedOriginPatterns instead of
+        // allowedOrigins("*") so this is safe
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable())
+        http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Allow ALL preflight OPTIONS requests without authentication
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // Public auth endpoints
                 .requestMatchers(HttpMethod.POST, "/api/auth/send-otp").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/verify-otp").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                // Firebase auth endpoints
-                .requestMatchers(HttpMethod.POST, "/api/auth/firebase/verify-phone").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/firebase/login").permitAll()
+                // Supabase auth endpoints (replaces Firebase)
+                .requestMatchers(HttpMethod.POST, "/api/auth/supabase/send-otp").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/supabase/verify-otp").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/supabase/mark-verified").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/supabase/login").permitAll()
                 // Public food and analytics
                 .requestMatchers(HttpMethod.GET, "/api/food/available").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/food/nearby").hasRole("NGO")
+                .requestMatchers(HttpMethod.GET, "/api/food/animal-feed").hasAnyRole("ANIMAL_CARE", "ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/analytics/public").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/hello").permitAll()
                 // WebSocket endpoint
                 .requestMatchers("/ws/**").permitAll()
                 // Profile - any authenticated user
                 .requestMatchers("/api/profile/**").authenticated()
-                // Ratings - NGO can submit, public can view
-                .requestMatchers(HttpMethod.POST, "/api/ratings").hasRole("NGO")
+                // Chat - any authenticated user
+                .requestMatchers("/api/chat/**").authenticated()
+                // Image upload - authenticated
+                .requestMatchers("/api/images/**").authenticated()
+                // Ratings - NGO/ANIMAL_CARE can submit, public can view
+                .requestMatchers(HttpMethod.POST, "/api/ratings").hasAnyRole("NGO", "ANIMAL_CARE")
                 .requestMatchers(HttpMethod.GET, "/api/ratings/**").permitAll()
                 // Donor-only endpoints
                 .requestMatchers(HttpMethod.POST, "/api/food/list").hasRole("DONOR")
@@ -64,6 +102,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/pickups/*/accept").hasRole("VOLUNTEER")
                 .requestMatchers(HttpMethod.GET, "/api/pickups/my-assignments").hasRole("VOLUNTEER")
                 .requestMatchers(HttpMethod.PATCH, "/api/pickups/*/status").hasRole("VOLUNTEER")
+                .requestMatchers(HttpMethod.GET, "/api/pickups/my-optimized-route").hasRole("VOLUNTEER")
                 // NGO pickup endpoints
                 .requestMatchers(HttpMethod.GET, "/api/pickups/my-requests").hasRole("NGO")
                 .requestMatchers(HttpMethod.GET, "/api/pickups/my-active-requests").hasRole("NGO")

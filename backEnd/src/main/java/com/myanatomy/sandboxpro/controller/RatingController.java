@@ -7,6 +7,7 @@ import com.myanatomy.sandboxpro.model.User;
 import com.myanatomy.sandboxpro.repository.PickupRequestRepository;
 import com.myanatomy.sandboxpro.repository.RatingRepository;
 import com.myanatomy.sandboxpro.repository.UserRepository;
+import com.myanatomy.sandboxpro.service.TrustScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,17 +21,14 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class RatingController {
 
-    @Autowired
-    private RatingRepository ratingRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PickupRequestRepository pickupRequestRepository;
+    @Autowired private RatingRepository ratingRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PickupRequestRepository pickupRequestRepository;
+    @Autowired private TrustScoreService trustScoreService; // F6
 
     /**
      * NGO submits a rating for a donor after delivery.
+     * F6: Also triggers trust score recalculation.
      */
     @PostMapping
     public ResponseEntity<?> submitRating(@RequestBody RatingRequest request) {
@@ -58,26 +56,41 @@ public class RatingController {
 
         ratingRepository.save(rating);
 
-        // Auto-suspend donor if they have 3+ bad ratings (score <= 2)
-        long badRatings = ratingRepository.countBadRatingsByDonorPhone(request.getDonorPhone());
-        if (badRatings >= 3) {
-            donor.setStatus(User.Status.SUSPENDED);
-            userRepository.save(donor);
-        }
+        // F6: Update donor's totalRatings and recalculate trust score
+        donor.setTotalRatings((donor.getTotalRatings() != null ? donor.getTotalRatings() : 0) + 1);
+        trustScoreService.recalculate(donor);
 
-        return ResponseEntity.ok(Map.of("message", "Rating submitted successfully", "score", request.getScore()));
+        return ResponseEntity.ok(Map.of(
+            "message", "Rating submitted successfully",
+            "score", request.getScore(),
+            "donorTrustScore", donor.getTrustScore()
+        ));
     }
 
     /**
-     * Get average trust score for a donor.
+     * Get trust score and rating info for a donor.
+     * F6: Returns composite trust score breakdown.
      */
     @GetMapping("/donor/{phone}")
     public ResponseEntity<?> getDonorRating(@PathVariable String phone) {
         Double avg = ratingRepository.getAverageScoreByDonorPhone(phone);
         List<Rating> ratings = ratingRepository.findByDonorPhone(phone);
+        User donor = userRepository.findByPhone(phone).orElse(null);
+
         return ResponseEntity.ok(Map.of(
-                "averageScore", avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0,
-                "totalRatings", ratings.size()
+            "averageScore",    avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0,
+            "totalRatings",    ratings.size(),
+            "trustScore",      donor != null && donor.getTrustScore() != null ? donor.getTrustScore() : 5.0,
+            "totalDeliveries", donor != null && donor.getTotalDeliveries() != null ? donor.getTotalDeliveries() : 0,
+            "completionRate",  computeCompletionRate(donor)
         ));
+    }
+
+    private double computeCompletionRate(User user) {
+        if (user == null) return 1.0;
+        int d = user.getTotalDeliveries()    != null ? user.getTotalDeliveries()    : 0;
+        int c = user.getTotalCancellations() != null ? user.getTotalCancellations() : 0;
+        int total = d + c;
+        return total > 0 ? Math.round((double) d / total * 1000.0) / 10.0 : 100.0;
     }
 }

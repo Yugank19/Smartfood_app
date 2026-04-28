@@ -12,6 +12,9 @@ public interface RatingRepository extends JpaRepository<Rating, Long> {
 
     List<Rating> findByDonorPhone(String phone);
 
+    // Ratings given by an NGO
+    List<Rating> findByNgoPhone(String phone);
+
     @Query("SELECT AVG(r.score) FROM Rating r WHERE r.donor.phone = :phone")
     Double getAverageScoreByDonorPhone(String phone);
 

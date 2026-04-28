@@ -15,7 +15,7 @@ export const geocodeAddress = async (address) => {
         const res = await fetch(url, {
             headers: {
                 'Accept-Language': 'en',
-                'User-Agent': 'HarvestLink-FoodRedistribution/1.0'
+                'User-Agent': 'MealBridge-FoodRedistribution/1.0'
             }
         });
         const data = await res.json();

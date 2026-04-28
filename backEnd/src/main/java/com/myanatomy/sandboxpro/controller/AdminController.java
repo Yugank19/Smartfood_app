@@ -9,6 +9,7 @@ import com.myanatomy.sandboxpro.model.User;
 import com.myanatomy.sandboxpro.repository.FoodListingRepository;
 import com.myanatomy.sandboxpro.repository.PickupRequestRepository;
 import com.myanatomy.sandboxpro.repository.UserRepository;
+import com.myanatomy.sandboxpro.service.AdvancedAnalyticsService;
 import com.myanatomy.sandboxpro.service.AnalyticsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +35,9 @@ public class AdminController {
 
     @Autowired
     private AnalyticsService analyticsService;
+
+    @Autowired
+    private AdvancedAnalyticsService advancedAnalyticsService;
 
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
@@ -67,6 +71,14 @@ public class AdminController {
     @GetMapping("/analytics")
     public ResponseEntity<AdminAnalyticsDTO> getAnalytics() {
         return ResponseEntity.ok(analyticsService.getAdminAnalytics());
+    }
+
+    /**
+     * Feature 5: Advanced Analytics Dashboard
+     */
+    @GetMapping("/analytics/advanced")
+    public ResponseEntity<?> getAdvancedAnalytics() {
+        return ResponseEntity.ok(advancedAnalyticsService.getFullAnalytics());
     }
 
     /**

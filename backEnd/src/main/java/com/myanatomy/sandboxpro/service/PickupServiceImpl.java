@@ -11,6 +11,7 @@ import com.myanatomy.sandboxpro.repository.FoodListingRepository;
 import com.myanatomy.sandboxpro.repository.PickupRequestRepository;
 import com.myanatomy.sandboxpro.repository.UserRepository;
 import com.myanatomy.sandboxpro.service.NotificationService;
+import com.myanatomy.sandboxpro.service.TrustScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,9 @@ public class PickupServiceImpl implements PickupService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private TrustScoreService trustScoreService;
+
     @Override
     public PickupRequest createPickupRequest(FoodListing listing, User ngo) {
         PickupRequest pickupRequest = new PickupRequest();
@@ -49,6 +53,7 @@ public class PickupServiceImpl implements PickupService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PickupRequestDTO> getAvailablePickups() {
         return pickupRequestRepository.findByStatus(PickupRequest.Status.PENDING)
                 .stream()
@@ -84,6 +89,7 @@ public class PickupServiceImpl implements PickupService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PickupRequestDTO> getMyAssignments(String volunteerPhone) {
         return pickupRequestRepository.findByVolunteerPhoneOrderByUpdatedAtDesc(volunteerPhone)
                 .stream()
@@ -116,6 +122,12 @@ public class PickupServiceImpl implements PickupService {
             FoodListing foodListing = pickup.getFoodListing();
             foodListing.setStatus(FoodListing.ListingStatus.DELIVERED);
             foodListingRepository.save(foodListing);
+
+            // Update trust score for the donor on successful delivery
+            User donor = foodListing.getDonor();
+            if (donor != null) {
+                trustScoreService.recordDelivery(donor);
+            }
         } else {
             throw new IllegalArgumentException("Invalid transition: " + current + " → " + newStatus);
         }

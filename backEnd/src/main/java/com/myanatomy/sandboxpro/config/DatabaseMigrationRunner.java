@@ -7,8 +7,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs once on startup to fix legacy schema constraints.
- * Makes email and password columns nullable so PIN-based auth works.
+ * Runs once on startup to ensure schema compatibility.
+ * PostgreSQL (Supabase) version — uses IF EXISTS / DO $$ syntax.
  */
 @Component
 public class DatabaseMigrationRunner implements ApplicationRunner {
@@ -18,24 +18,24 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        try {
-            // Check if email column exists and is NOT NULL, then fix it
-            jdbcTemplate.execute(
-                "ALTER TABLE users MODIFY COLUMN email VARCHAR(255) NULL DEFAULT NULL"
-            );
-            System.out.println("[Migration] users.email column made nullable.");
-        } catch (Exception e) {
-            // Column may already be nullable or not exist — safe to ignore
-            System.out.println("[Migration] email column already nullable or not present: " + e.getMessage());
-        }
+        // Make email column nullable if it exists (legacy migration)
+        runSafe("ALTER TABLE users ALTER COLUMN email DROP NOT NULL",
+                "users.email column made nullable (or already was).");
 
+        // Make password column nullable if it exists (legacy migration)
+        runSafe("ALTER TABLE users ALTER COLUMN password DROP NOT NULL",
+                "users.password column made nullable (or already was).");
+
+        System.out.println("[Migration] Supabase PostgreSQL schema check complete.");
+    }
+
+    private void runSafe(String sql, String successMsg) {
         try {
-            jdbcTemplate.execute(
-                "ALTER TABLE users MODIFY COLUMN password VARCHAR(255) NULL DEFAULT NULL"
-            );
-            System.out.println("[Migration] users.password column made nullable.");
+            jdbcTemplate.execute(sql);
+            System.out.println("[Migration] " + successMsg);
         } catch (Exception e) {
-            System.out.println("[Migration] password column already nullable or not present: " + e.getMessage());
+            // Column may not exist or already be nullable — safe to ignore
+            System.out.println("[Migration] Skipped (not needed): " + e.getMessage().split("\n")[0]);
         }
     }
 }

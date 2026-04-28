@@ -18,7 +18,7 @@ public class DeliveryLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "pickup_request_id", nullable = false)
     private PickupRequest pickupRequest;
 
@@ -30,7 +30,7 @@ public class DeliveryLog {
     @Column(nullable = false)
     private PickupRequest.Status newStatus;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "changed_by_id", nullable = false)
     private User changedBy;
 

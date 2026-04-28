@@ -13,6 +13,12 @@ const LandingPage = () => {
 
     const fmt = (val, fallback) => val !== null && val !== undefined ? val.toLocaleString() : fallback;
 
+    const token = sessionStorage.getItem('token');
+    const role = sessionStorage.getItem('role');
+    const dashboardPath = {
+        ROLE_DONOR: '/donor', ROLE_NGO: '/ngo', ROLE_VOLUNTEER: '/volunteer', ROLE_ADMIN: '/admin'
+    }[role] || '/';
+
     return (
         <div className="bg-surface font-body text-on-surface">
             {/* Hero Section */}
@@ -30,13 +36,22 @@ const LandingPage = () => {
                             Our smart ecosystem bridges the gap between surplus food and those who need it most. We turn logistics into lifelines through real-time redistribution.
                         </p>
                         <div className="flex flex-wrap gap-4 pt-4">
-                            <Link to="/register" className="impact-gradient text-on-primary px-8 py-4 rounded-xl font-bold text-lg shadow-xl shadow-primary/20 flex items-center gap-2 group">
-                                Become a Donor
-                                <span className="material-symbols-outlined">arrow_forward</span>
-                            </Link>
-                            <Link to="/register" className="bg-surface-container-high text-primary px-8 py-4 rounded-xl font-bold text-lg hover:bg-surface-container-highest transition-all">
-                                Register as NGO
-                            </Link>
+                            {token ? (
+                                <Link to={dashboardPath} className="impact-gradient text-on-primary px-8 py-4 rounded-xl font-bold text-lg shadow-xl shadow-primary/20 flex items-center gap-2 group">
+                                    Go to Dashboard
+                                    <span className="material-symbols-outlined">arrow_forward</span>
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link to="/register" className="impact-gradient text-on-primary px-8 py-4 rounded-xl font-bold text-lg shadow-xl shadow-primary/20 flex items-center gap-2 group">
+                                        Become a Donor
+                                        <span className="material-symbols-outlined">arrow_forward</span>
+                                    </Link>
+                                    <Link to="/register" className="bg-surface-container-high text-primary px-8 py-4 rounded-xl font-bold text-lg hover:bg-surface-container-highest transition-all">
+                                        Register as NGO
+                                    </Link>
+                                </>
+                            )}
                         </div>
                     </div>
                     <div className="relative">
@@ -248,8 +263,8 @@ const LandingPage = () => {
                             Join 2,000+ organizations already saving the planet and feeding the world. Registration takes less than 5 minutes.
                         </p>
                         <div className="flex flex-wrap gap-6 justify-center">
-                            <Link to="/register" className="bg-secondary-fixed text-on-secondary-fixed px-10 py-5 rounded-2xl font-bold text-xl shadow-xl shadow-black/20 hover:scale-105 transition-transform">
-                                Join Now
+                            <Link to={token ? dashboardPath : "/register"} className="bg-secondary-fixed text-on-secondary-fixed px-10 py-5 rounded-2xl font-bold text-xl shadow-xl shadow-black/20 hover:scale-105 transition-transform">
+                                {token ? 'Go to Dashboard' : 'Join Now'}
                             </Link>
                             <button className="border-2 border-on-primary/20 text-on-primary px-10 py-5 rounded-2xl font-bold text-xl hover:bg-on-primary/10 transition-colors">
                                 Book a Demo

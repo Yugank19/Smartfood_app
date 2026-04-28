@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import useFirebaseOtp from '../hooks/useFirebaseOtp';
+import useSupabaseOtp from '../hooks/useSupabaseOtp';
 
 const STEPS = ['Phone', 'Verify OTP', 'Your Details', 'Set PIN'];
 
@@ -40,45 +40,60 @@ const RegisterPage = () => {
     const [confirmPin, setConfirmPin] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    // Store OTP result in component state so it's available when step 1 renders
+    const [devOtp, setDevOtp] = useState('');
+    const [smsSent, setSmsSent] = useState(false);
     const navigate = useNavigate();
 
-    const firebase = useFirebaseOtp();
+    const supabaseOtp = useSupabaseOtp();
 
-    // ── Step 1: Send OTP via Firebase ─────────────────────────────────────────
+    const inputStyle = {
+        width: '100%', padding: '0.875rem 1rem', borderRadius: '10px',
+        border: '1.5px solid #E5E7EB', fontSize: '1rem', outline: 'none',
+        background: '#f9fafb', boxSizing: 'border-box'
+    };
+    const btnPrimary = {
+        width: '100%', padding: '1rem', borderRadius: '10px', border: 'none',
+        background: 'linear-gradient(135deg, #003527 0%, #064e3b 100%)',
+        color: 'white', fontWeight: 700, fontSize: '1rem', cursor: 'pointer'
+    };
+    const cardStyle = {
+        background: 'white', borderRadius: '16px', padding: '2.5rem',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.08)', border: '1px solid #E5E7EB'
+    };
+
+    // ── Step 1: Send OTP ──────────────────────────────────────────────────────
     const handleSendOtp = async () => {
         if (!phone.trim()) { setError('Please enter your mobile number.'); return; }
         setError('');
         setLoading(true);
-        const success = await firebase.sendOtp(phone, 'recaptcha-container');
+        const result = await supabaseOtp.sendOtp(phone);
         setLoading(false);
-        if (success) {
+        if (result.ok) {
+            // Store in component state — available immediately when step 1 renders
+            setDevOtp(result.devOtp || '');
+            setSmsSent(result.supabaseSent === true);
             setStep(1);
         } else {
-            setError(firebase.error || 'Failed to send OTP. Please try again.');
+            setError(supabaseOtp.error || 'Failed to send OTP. Please try again.');
         }
     };
 
-    // ── Step 2: Verify OTP via Firebase ──────────────────────────────────────
+    // ── Step 2: Verify OTP ────────────────────────────────────────────────────
     const handleVerifyOtp = async () => {
         if (!otp.trim() || otp.length !== 6) { setError('Please enter the 6-digit OTP.'); return; }
         setError('');
         setLoading(true);
-        const idToken = await firebase.verifyOtp(otp);
+        const ok = await supabaseOtp.verifyOtp(phone, otp, smsSent);
         setLoading(false);
-        if (idToken) {
-            // Tell backend the phone is verified
-            try {
-                await axios.post('http://localhost:8080/api/auth/firebase/verify-phone', { idToken });
-                setStep(2);
-            } catch (err) {
-                setError(err.response?.data?.message || 'Verification failed. Please try again.');
-            }
+        if (ok) {
+            setStep(2);
         } else {
-            setError(firebase.error || 'Invalid OTP. Please try again.');
+            setError(supabaseOtp.error || 'Invalid OTP. Please try again.');
         }
     };
 
-    // ── Step 3: Profile details ───────────────────────────────────────────────
+    // ── Step 3: Profile ───────────────────────────────────────────────────────
     const handleProfileNext = () => {
         if (!profile.fullName.trim()) { setError('Full name is required.'); return; }
         if ((profile.role === 'DONOR' || profile.role === 'NGO') && !profile.organizationName.trim()) {
@@ -92,50 +107,34 @@ const RegisterPage = () => {
     const handleRegister = async () => {
         if (pin.length !== 6 || !/^\d{6}$/.test(pin)) { setError('PIN must be exactly 6 numeric digits.'); return; }
         if (pin !== confirmPin) { setError('PINs do not match.'); return; }
-        setLoading(true); setError('');
+        setLoading(true);
+        setError('');
         try {
-            // Normalize phone for backend (strip country code)
-            const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+            const normalizedPhone = supabaseOtp.normalize(phone);
             await axios.post('http://localhost:8080/api/auth/register', {
                 phone: normalizedPhone, ...profile, pin
             });
             const loginRes = await axios.post('http://localhost:8080/api/auth/login', {
                 phone: normalizedPhone, pin
             });
-            localStorage.setItem('token', loginRes.data.token);
-            localStorage.setItem('role', loginRes.data.role);
-            localStorage.setItem('phone', loginRes.data.phone);
+            sessionStorage.setItem('token', loginRes.data.token);
+            sessionStorage.setItem('role', loginRes.data.role);
+            sessionStorage.setItem('phone', loginRes.data.phone);
             const role = loginRes.data.role;
             if (role === 'ROLE_DONOR') navigate('/donor');
             else if (role === 'ROLE_NGO') navigate('/ngo');
             else if (role === 'ROLE_VOLUNTEER') navigate('/volunteer');
+            else if (role === 'ROLE_ADMIN') navigate('/admin');
             else navigate('/');
         } catch (err) {
             setError(err.response?.data?.message || 'Registration failed. Please check your details.');
-        } finally { setLoading(false); }
-    };
-
-    const cardStyle = {
-        background: 'white', borderRadius: '16px', padding: '2.5rem',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.08)', border: '1px solid #E5E7EB'
-    };
-    const inputStyle = {
-        width: '100%', padding: '0.875rem 1rem', borderRadius: '10px',
-        border: '1.5px solid #E5E7EB', fontSize: '1rem', outline: 'none',
-        background: '#f9fafb', boxSizing: 'border-box', transition: 'border-color 0.2s'
-    };
-    const btnPrimary = {
-        width: '100%', padding: '1rem', borderRadius: '10px', border: 'none',
-        background: 'linear-gradient(135deg, #003527 0%, #064e3b 100%)',
-        color: 'white', fontWeight: 700, fontSize: '1rem', cursor: 'pointer',
-        transition: 'opacity 0.2s'
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div style={{ minHeight: '100vh', background: '#f8f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5rem 1rem 2rem' }}>
-            {/* Invisible reCAPTCHA container — required by Firebase */}
-            <div id="recaptcha-container"></div>
-
             <div style={{ width: '100%', maxWidth: '520px' }}>
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <h1 style={{ fontSize: '2rem', color: '#003527', marginBottom: '0.5rem', fontFamily: 'Manrope, sans-serif' }}>
@@ -158,7 +157,7 @@ const RegisterPage = () => {
                         <div>
                             <h3 style={{ marginBottom: '0.5rem', color: '#003527' }}>Enter your mobile number</h3>
                             <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                We'll send a verification code via SMS using Firebase.
+                                We'll send a verification code via SMS.
                             </p>
                             <div style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>
@@ -166,18 +165,22 @@ const RegisterPage = () => {
                                 </label>
                                 <input
                                     type="tel"
-                                    placeholder="e.g., 9876543210 or +919876543210"
+                                    placeholder="e.g., 9876543210"
                                     value={phone}
                                     onChange={e => setPhone(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
                                     style={inputStyle}
                                 />
                                 <p style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.4rem' }}>
-                                    Indian numbers: enter 10 digits. International: include country code (+1, +44, etc.)
+                                    Enter 10-digit number. Country code (+91) added automatically.
                                 </p>
                             </div>
-                            <button onClick={handleSendOtp} disabled={loading || firebase.loading} style={{ ...btnPrimary, opacity: (loading || firebase.loading) ? 0.6 : 1 }}>
-                                {loading || firebase.loading ? '⏳ Sending OTP...' : 'Send Verification Code →'}
+                            <button
+                                onClick={handleSendOtp}
+                                disabled={loading || supabaseOtp.loading}
+                                style={{ ...btnPrimary, opacity: (loading || supabaseOtp.loading) ? 0.6 : 1 }}
+                            >
+                                {loading || supabaseOtp.loading ? '⏳ Sending OTP...' : 'Send Verification Code →'}
                             </button>
                         </div>
                     )}
@@ -186,15 +189,34 @@ const RegisterPage = () => {
                     {step === 1 && (
                         <div>
                             <h3 style={{ marginBottom: '0.5rem', color: '#003527' }}>Verify your number</h3>
-                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                                Enter the 6-digit code sent to <strong>{phone}</strong>.{' '}
-                                <span onClick={() => { setStep(0); setOtp(''); firebase.reset(); }} style={{ color: '#F59E0B', cursor: 'pointer', fontWeight: 600 }}>
+                            <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                                Enter the 6-digit code for <strong>{phone}</strong>.{' '}
+                                <span onClick={() => { setStep(0); setOtp(''); supabaseOtp.reset(); }} style={{ color: '#F59E0B', cursor: 'pointer', fontWeight: 600 }}>
                                     Change
                                 </span>
                             </p>
-                            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1.25rem', fontSize: '0.85rem', color: '#065F46', fontWeight: 600 }}>
-                                🔥 OTP sent via Firebase SMS to {phone}
-                            </div>
+
+                            {/* Simulated OTP Display (Supabase Connection Cut) */}
+                            {devOtp && (
+                                <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                                    <p style={{ fontWeight: 700, margin: '0 0 8px', fontSize: '0.9rem', color: '#065F46' }}>
+                                        🚀 Test Verification Code
+                                    </p>
+                                    <div style={{
+                                        background: '#003527', color: '#acf847',
+                                        padding: '12px 16px', borderRadius: '10px',
+                                        fontFamily: 'monospace', fontSize: '2.25rem',
+                                        letterSpacing: '12px', textAlign: 'center',
+                                        fontWeight: 800, margin: '10px 0'
+                                    }}>
+                                        {devOtp}
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#065F46', opacity: 0.8 }}>
+                                        Enter this 6-digit code below to verify your number.
+                                    </p>
+                                </div>
+                            )}
+
                             <div style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>
                                     Verification Code
@@ -205,16 +227,21 @@ const RegisterPage = () => {
                                     placeholder="000000"
                                     value={otp}
                                     inputMode="numeric"
+                                    autoFocus
                                     style={{ ...inputStyle, textAlign: 'center', letterSpacing: '10px', fontSize: '1.75rem', fontWeight: 'bold' }}
                                     onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                 />
                             </div>
-                            <button onClick={handleVerifyOtp} disabled={loading || firebase.loading} style={{ ...btnPrimary, opacity: (loading || firebase.loading) ? 0.6 : 1 }}>
-                                {loading || firebase.loading ? '⏳ Verifying...' : 'Verify Code →'}
+                            <button
+                                onClick={handleVerifyOtp}
+                                disabled={loading || supabaseOtp.loading || otp.length !== 6}
+                                style={{ ...btnPrimary, opacity: (loading || supabaseOtp.loading || otp.length !== 6) ? 0.6 : 1 }}
+                            >
+                                {loading || supabaseOtp.loading ? '⏳ Verifying...' : 'Verify Code →'}
                             </button>
                             <button
-                                onClick={async () => { setOtp(''); firebase.reset(); await handleSendOtp(); }}
-                                disabled={loading || firebase.loading}
+                                onClick={() => { setOtp(''); supabaseOtp.reset(); handleSendOtp(); }}
+                                disabled={loading || supabaseOtp.loading}
                                 style={{ width: '100%', marginTop: '0.75rem', padding: '0.875rem', borderRadius: '10px', border: '1.5px solid #E5E7EB', background: 'transparent', color: '#6B7280', fontWeight: 600, cursor: 'pointer' }}
                             >
                                 Resend Code
@@ -227,12 +254,10 @@ const RegisterPage = () => {
                         <div>
                             <h3 style={{ marginBottom: '0.5rem', color: '#003527' }}>Tell us about yourself</h3>
                             <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Fill in your profile details.</p>
-
                             <div style={{ marginBottom: '1.25rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>Full Name</label>
                                 <input style={inputStyle} placeholder="e.g., Arjun Sharma" value={profile.fullName} onChange={e => setProfile({ ...profile, fullName: e.target.value })} />
                             </div>
-
                             <div style={{ marginBottom: '1.25rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>Account Role</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -250,21 +275,18 @@ const RegisterPage = () => {
                                     ))}
                                 </div>
                             </div>
-
                             {(profile.role === 'DONOR' || profile.role === 'NGO') && (
                                 <div style={{ marginBottom: '1.25rem' }}>
                                     <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>
                                         Organization Name <span style={{ color: '#DC2626' }}>*</span>
                                     </label>
-                                    <input style={inputStyle} placeholder="e.g., Green Harvest Group" value={profile.organizationName} onChange={e => setProfile({ ...profile, organizationName: e.target.value })} />
+                                    <input style={inputStyle} placeholder="e.g., MealBridge Organization" value={profile.organizationName} onChange={e => setProfile({ ...profile, organizationName: e.target.value })} />
                                 </div>
                             )}
-
                             <div style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>Address</label>
                                 <input style={inputStyle} placeholder="123 Main St, City" value={profile.address} onChange={e => setProfile({ ...profile, address: e.target.value })} />
                             </div>
-
                             <button onClick={handleProfileNext} style={btnPrimary}>Continue →</button>
                         </div>
                     )}
@@ -276,7 +298,6 @@ const RegisterPage = () => {
                             <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                                 Choose a 6-digit PIN. You'll use this to log in every time.
                             </p>
-
                             <div style={{ marginBottom: '1.25rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>Create PIN</label>
                                 <input
@@ -285,7 +306,6 @@ const RegisterPage = () => {
                                     onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                 />
                             </div>
-
                             <div style={{ marginBottom: '1.5rem' }}>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9rem', color: '#003527' }}>Confirm PIN</label>
                                 <input
@@ -297,11 +317,9 @@ const RegisterPage = () => {
                                     <p style={{ color: '#DC2626', fontSize: '0.8rem', marginTop: '0.4rem' }}>PINs do not match.</p>
                                 )}
                             </div>
-
                             <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '0.875rem', marginBottom: '1.5rem', fontSize: '0.8rem', color: '#065F46' }}>
                                 🔒 Your PIN is encrypted and never stored in plain text.
                             </div>
-
                             <button
                                 onClick={handleRegister}
                                 disabled={loading || pin !== confirmPin || pin.length !== 6}

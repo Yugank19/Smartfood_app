@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import AdvancedAnalytics from '../components/AdvancedAnalytics';
 
 const AdminDashboard = () => {
     const [analytics, setAnalytics] = useState(null);
@@ -13,7 +14,7 @@ const AdminDashboard = () => {
     const [message, setMessage] = useState('');
     const navigate = useNavigate();
 
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
     const fetchData = useCallback(async () => {
@@ -32,7 +33,7 @@ const AdminDashboard = () => {
             setPickups(pickupsRes.data);
         } catch (err) {
             if (err.response?.status === 401 || err.response?.status === 403) {
-                localStorage.clear(); navigate('/login');
+                sessionStorage.clear(); navigate('/login');
             }
         } finally { setLoading(false); }
     }, [token]);
@@ -97,6 +98,7 @@ const AdminDashboard = () => {
                         { key: 'users', label: 'User Management' },
                         { key: 'listings', label: 'Food Listings' },
                         { key: 'pickups', label: 'Pickup Requests' },
+                        { key: 'analytics', label: 'Advanced Analytics' },
                     ].map(item => (
                         <div key={item.key}
                             onClick={() => setActiveTab(item.key)}
@@ -321,6 +323,12 @@ const AdminDashboard = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                )}
+                {/* Advanced Analytics Tab */}
+                {activeTab === 'analytics' && (
+                    <div className="animate-slide-up">
+                        <AdvancedAnalytics token={token} />
                     </div>
                 )}
             </main>

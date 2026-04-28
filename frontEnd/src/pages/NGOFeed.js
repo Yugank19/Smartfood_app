@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import FoodMap from '../components/FoodMap';
 import RouteMap from '../components/RouteMap';
+import ChatBox from '../components/ChatBox';
 import { geocodeAddress } from '../utils/geocode';
 import useWebSocket from '../hooks/useWebSocket';
 
@@ -22,16 +23,20 @@ const NGOFeed = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [selectedImageSet, setSelectedImageSet] = useState(null); // For viewing multiple images in a modal
+    const [selectedDetailListing, setSelectedDetailListing] = useState(null); // For full details modal
     const [geocodingStatus, setGeocodingStatus] = useState('');
     const [activeView, setActiveView] = useState('list');
     const [routeTarget, setRouteTarget] = useState(null);
+    const [chatPickupId, setChatPickupId] = useState(null); // Feature 4: Chat
     const [userCoords, setUserCoords] = useState({ lat: null, lng: null });
-    const [selectedRadius, setSelectedRadius] = useState(null); // null = not selected yet
+    const [selectedRadius, setSelectedRadius] = useState(null);
+    // Only show radius modal if no radius was previously selected this session
     const [showRadiusModal, setShowRadiusModal] = useState(false);
     const navigate = useNavigate();
 
-    const token = localStorage.getItem('token');
-    const phone = localStorage.getItem('phone');
+    const token = sessionStorage.getItem('token');
+    const phone = sessionStorage.getItem('phone');
     const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
     // Geocode all listings that are missing coordinates
@@ -76,9 +81,13 @@ const NGOFeed = () => {
                 axios.get('http://localhost:8080/api/pickups/my-requests', authHeader)
             ]);
             const raw = listingsRes.data;
-            setAvailableListings(raw);
+            // Immediate frontend filter for expiry to ensure "disappear" requirement
+            const now = new Date();
+            const filtered = raw.filter(l => new Date(l.expiryTime) > now);
+            
+            setAvailableListings(filtered);
             setMyRequests(requestsRes.data);
-            setMappableListings(raw);
+            setMappableListings(filtered);
 
             const withoutCoords = raw.filter(l => !l.latitude || !l.longitude);
             if (withoutCoords.length > 0) {
@@ -86,22 +95,42 @@ const NGOFeed = () => {
             }
         } catch (err) {
             if (err.response?.status === 401 || err.response?.status === 403) {
-                localStorage.clear(); navigate('/login');
+                sessionStorage.clear(); navigate('/login');
             }
         } finally { setLoading(false); }
-    }, [token, geocodeListings]);
+    }, [token, geocodeListings, navigate]);
 
-    // On mount: get GPS then show radius selector modal
+    // On mount: get GPS then show radius selector modal (only if not already set this session)
     useEffect(() => {
+        const savedRadius = sessionStorage.getItem('ngo_radius');
+        if (savedRadius) {
+            // Radius already chosen this session — skip modal
+            const r = parseInt(savedRadius, 10);
+            setSelectedRadius(r);
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                        setUserCoords(coords);
+                        fetchData(coords.lat, coords.lng, r);
+                    },
+                    () => fetchData(null, null, r),
+                    { enableHighAccuracy: true, timeout: 8000 }
+                );
+            } else {
+                fetchData(null, null, r);
+            }
+            return;
+        }
+
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                     setUserCoords(coords);
-                    setShowRadiusModal(true); // show radius picker after getting location
+                    setShowRadiusModal(true);
                 },
                 () => {
-                    // Location denied — show modal anyway (will fetch without radius)
                     setShowRadiusModal(true);
                     fetchData(null, null, null);
                 },
@@ -124,6 +153,7 @@ const NGOFeed = () => {
 
     const handleRadiusSelect = (km) => {
         setSelectedRadius(km);
+        sessionStorage.setItem('ngo_radius', km.toString()); // persist for this session
         setShowRadiusModal(false);
     };
 
@@ -135,6 +165,11 @@ const NGOFeed = () => {
                 setMessage(`🔔 New donation: ${data.foodType} (${data.quantity}) from ${data.donorName}`);
                 setTimeout(() => setMessage(''), 8000);
                 fetchData(userCoords.lat, userCoords.lng, selectedRadius);
+            } else if (data.type === 'IMAGES_UPDATED') {
+                // Instantly update the image for that listing in the state
+                setAvailableListings(prev => prev.map(l => 
+                    l.id === data.listingId ? { ...l, imageUrls: data.imageUrls } : l
+                ));
             } else if (['VOLUNTEER_ASSIGNED', 'PICKED_UP', 'DELIVERED'].includes(data.type)) {
                 fetchData(userCoords.lat, userCoords.lng, selectedRadius);
             }
@@ -146,6 +181,7 @@ const NGOFeed = () => {
             await axios.patch(`http://localhost:8080/api/food/${id}/claim`, {}, authHeader);
             setMessage('✓ Donation claimed! A pickup request has been created.');
             setTimeout(() => setMessage(''), 5000);
+            setActiveView('requests'); // Switch to requests view
             fetchData(userCoords.lat, userCoords.lng, selectedRadius);
         } catch (err) {
             setMessage('Error: ' + (err.response?.data?.message || 'Could not claim listing.'));
@@ -171,7 +207,8 @@ const NGOFeed = () => {
     );
 
     const pendingRequests = myRequests.filter(r => r.status !== 'DELIVERED');
-    const deliveredCount = myRequests.filter(r => r.status === 'DELIVERED').length;
+    const deliveredRequests = myRequests.filter(r => r.status === 'DELIVERED');
+    const deliveredCount = deliveredRequests.length;
     const mappedCount = mappableListings.filter(l => l.latitude && l.longitude).length;
 
     const statusBadge = (s) => {
@@ -245,7 +282,7 @@ const NGOFeed = () => {
                         </div>
 
                         <button
-                            onClick={() => { setSelectedRadius(null); setShowRadiusModal(false); fetchData(null, null, null); }}
+                            onClick={() => { setSelectedRadius(null); sessionStorage.removeItem('ngo_radius'); setShowRadiusModal(false); fetchData(null, null, null); }}
                             style={{ width: '100%', marginTop: '12px', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
                         >
                             Show all food (no radius filter)
@@ -263,6 +300,37 @@ const NGOFeed = () => {
                     foodType={routeTarget.foodType}
                     onClose={() => setRouteTarget(null)}
                 />
+            )}
+
+            {/* Chat Modal — Feature 4 */}
+            {chatPickupId && (
+                <ChatBox
+                    pickupId={chatPickupId}
+                    currentUserPhone={phone}
+                    currentUserRole="NGO"
+                    onClose={() => setChatPickupId(null)}
+                />
+            )}
+
+            {/* Image Set Modal */}
+            {selectedImageSet && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md p-4" onClick={() => setSelectedImageSet(null)}>
+                    <div className="max-w-4xl w-full relative" onClick={e => e.stopPropagation()}>
+                        <button 
+                            className="absolute -top-12 right-0 text-white text-3xl font-bold p-2"
+                            onClick={() => setSelectedImageSet(null)}
+                        >
+                            ×
+                        </button>
+                        <div className="flex flex-wrap justify-center gap-4 max-h-[80vh] overflow-y-auto p-4">
+                            {selectedImageSet.map((url, i) => (
+                                <div key={i} className="rounded-2xl overflow-hidden shadow-2xl bg-white p-2">
+                                    <img src={url} alt={`Food ${i}`} className="max-w-full h-auto rounded-xl object-contain" style={{ maxHeight: '70vh' }} />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             )}
             {/* Sidebar */}
             <aside className="w-72 sidebar min-h-screen p-8 hidden lg:block">
@@ -286,6 +354,18 @@ const NGOFeed = () => {
                         className={`p-3 px-6 cursor-pointer transition-colors font-medium rounded-full ${activeView === 'map' ? 'nav-item-active' : 'text-on-surface-variant hover:text-primary'}`}
                     >
                         🗺 Live Map {mappedCount > 0 && <span className="ml-1 text-xs bg-secondary-container text-on-secondary-fixed-variant px-2 py-0.5 rounded-full">{mappedCount}</span>}
+                    </div>
+                    <div
+                        onClick={() => setActiveView('requests')}
+                        className={`p-3 px-6 cursor-pointer transition-colors font-medium rounded-full ${activeView === 'requests' ? 'nav-item-active' : 'text-on-surface-variant hover:text-primary'}`}
+                    >
+                        📦 My Requests {pendingRequests.length > 0 && <span className="ml-1 text-xs bg-primary text-on-primary px-2 py-0.5 rounded-full">{pendingRequests.length}</span>}
+                    </div>
+                    <div
+                        onClick={() => setActiveView('history')}
+                        className={`p-3 px-6 cursor-pointer transition-colors font-medium rounded-full ${activeView === 'history' ? 'nav-item-active' : 'text-on-surface-variant hover:text-primary'}`}
+                    >
+                        📜 History {deliveredCount > 0 && <span className="ml-1 text-xs bg-secondary-container text-on-secondary-fixed-variant px-2 py-0.5 rounded-full">{deliveredCount}</span>}
                     </div>
                     <Link to="/" className="block p-3 px-6 text-on-surface-variant hover:text-primary cursor-pointer transition-colors font-medium" style={{ textDecoration: 'none' }}>
                         🏠 Home
@@ -321,6 +401,18 @@ const NGOFeed = () => {
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeView === 'map' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant'}`}
                             >
                                 🗺 Map {mappedCount > 0 && `(${mappedCount})`}
+                            </button>
+                            <button
+                                onClick={() => setActiveView('requests')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeView === 'requests' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant'}`}
+                            >
+                                📦 Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
+                            </button>
+                            <button
+                                onClick={() => setActiveView('history')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeView === 'history' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant'}`}
+                            >
+                                📜 History
                             </button>
                         </div>
                         <input
@@ -484,8 +576,24 @@ const NGOFeed = () => {
                                                 style={{ borderLeft: `3px solid ${expiryColor}` }}
                                             >
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-sm">
-                                                        <span className="text-xl">🍽</span>
+                                                    <div className="w-16 h-16 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-sm overflow-hidden relative">
+                                                        {listing.imageUrls && listing.imageUrls.length > 0 ? (
+                                                            <>
+                                                                <img 
+                                                                    src={listing.imageUrls[0]} 
+                                                                    alt="Food" 
+                                                                    className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" 
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedImageSet(listing.imageUrls); }}
+                                                                />
+                                                                {listing.imageUrls.length > 1 && (
+                                                                    <div className="absolute bottom-0 right-0 bg-primary/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-tl-lg">
+                                                                        +{listing.imageUrls.length - 1}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xl">🍽</span>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <p className="font-bold text-lg">{listing.foodType}</p>
@@ -519,12 +627,20 @@ const NGOFeed = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleClaim(listing.id)}
-                                                    className="impact-gradient text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-sm hover:scale-105 transition-transform"
-                                                >
-                                                    Claim
-                                                </button>
+                                                <div className="flex flex-col gap-2 shrink-0">
+                                                    <button
+                                                        onClick={() => setSelectedDetailListing(listing)}
+                                                        className="px-4 py-2 rounded-xl bg-primary/5 text-primary text-[10px] font-bold hover:bg-primary/10 transition-colors border border-primary/10"
+                                                    >
+                                                        Details
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleClaim(listing.id)}
+                                                        className="impact-gradient text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-sm hover:scale-105 transition-transform"
+                                                    >
+                                                        Claim
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -548,8 +664,24 @@ const NGOFeed = () => {
                                         return (
                                             <div key={req.id} className="flex items-center justify-between p-4 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-colors">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-sm">
-                                                        <span className="text-xl">📦</span>
+                                                    <div className="w-16 h-16 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-sm overflow-hidden relative">
+                                                        {req.imageUrls && req.imageUrls.length > 0 ? (
+                                                            <>
+                                                                <img 
+                                                                    src={req.imageUrls[0]} 
+                                                                    alt="Food" 
+                                                                    className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" 
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedImageSet(req.imageUrls); }}
+                                                                />
+                                                                {req.imageUrls.length > 1 && (
+                                                                    <div className="absolute bottom-0 right-0 bg-primary/80 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-tl-lg">
+                                                                        +{req.imageUrls.length - 1}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xl">📦</span>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <p className="font-bold text-lg">{req.foodType}</p>
@@ -558,6 +690,9 @@ const NGOFeed = () => {
                                                         {req.volunteerName && (
                                                             <p className="text-xs text-secondary font-bold mt-1">🚴 {req.volunteerName}</p>
                                                         )}
+                                                        <p className="text-xs font-bold mt-1" style={{ color: '#003527' }}>
+                                                            📞 Donor: <a href={`tel:${req.donorPhone}`} className="hover:underline" style={{ color: 'inherit' }}>{req.donorPhone}</a>
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
@@ -578,6 +713,12 @@ const NGOFeed = () => {
                                                             Reject
                                                         </button>
                                                     )}
+                                                    <button
+                                                        onClick={() => setChatPickupId(req.id)}
+                                                        className="block mt-2 text-[10px] font-extrabold px-3 py-1 rounded-full bg-surface-container-high text-primary hover:scale-105 transition-transform"
+                                                    >
+                                                        💬 Chat
+                                                    </button>
                                                 </div>
                                             </div>
                                         );
@@ -587,7 +728,318 @@ const NGOFeed = () => {
                         </div>
                     </div>
                 )}
+
+                {/* ── REQUESTS TAB — active only ── */}
+                {activeView === 'requests' && (
+                    <div className="card-elevated animate-slide-up">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-headline font-extrabold">Active Pickup Requests</h2>
+                            <span className="text-xs font-bold text-on-surface-variant">{pendingRequests.length} active</span>
+                        </div>
+                        {pendingRequests.length === 0 ? (
+                            <div className="text-center py-16 opacity-50">
+                                <p className="font-bold text-on-surface-variant">No active requests. Claim a listing from the Food Feed!</p>
+                                {deliveredCount > 0 && (
+                                    <button onClick={() => setActiveView('history')} className="mt-4 text-sm font-bold text-primary underline">
+                                        View {deliveredCount} completed deliveries →
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {pendingRequests.map(req => {
+                                    const sc = statusBadge(req.status);
+                                    return (
+                                        <div key={req.id} className="flex items-center justify-between p-4 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-colors">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-surface-container-lowest flex items-center justify-center shadow-sm">
+                                                    <span className="text-xl">📦</span>
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-lg">{req.foodType}</p>
+                                                    <p className="text-on-surface-variant text-sm">{req.quantity}</p>
+                                                    <p className="text-on-surface-variant text-xs mt-0.5">📍 {req.location?.split(',').slice(0, 2).join(',')}</p>
+                                                    {req.volunteerName && (
+                                                        <p className="text-xs text-secondary font-bold mt-1">🚴 {req.volunteerName}</p>
+                                                    )}
+                                                    <p className="text-xs font-bold mt-1" style={{ color: '#003527' }}>
+                                                        📞 Donor: <a href={`tel:${req.donorPhone}`} className="hover:underline" style={{ color: 'inherit' }}>{req.donorPhone}</a>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end gap-2">
+                                                <p className="text-on-surface-variant text-xs font-bold uppercase">
+                                                    {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                </p>
+                                                <span className="text-[10px] font-extrabold px-3 py-1 rounded-full" style={{ background: sc.bg, color: sc.color }}>
+                                                    {req.status}
+                                                </span>
+                                                {req.status === 'PENDING' && (
+                                                    <button
+                                                        onClick={() => handleReject(req.id)}
+                                                        className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-error-container text-on-error-container hover:scale-105 transition-transform"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => setChatPickupId(req.id)}
+                                                    className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-surface-container-high text-primary hover:scale-105 transition-transform"
+                                                >
+                                                    💬 Chat
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── HISTORY TAB — delivered requests ── */}
+                {activeView === 'history' && (
+                    <div className="card-elevated animate-slide-up">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-headline font-extrabold">Delivery History</h2>
+                            <span className="text-xs font-bold bg-primary-fixed text-primary-container px-3 py-1 rounded-full">{deliveredCount} completed</span>
+                        </div>
+                        {deliveredRequests.length === 0 ? (
+                            <div className="text-center py-16 opacity-50">
+                                <p className="font-bold text-on-surface-variant">No completed deliveries yet.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {deliveredRequests.map(req => (
+                                    <div key={req.id} className="flex items-center justify-between p-4 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-colors border-l-4 border-secondary">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center shadow-sm">
+                                                <span className="text-xl">✅</span>
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-lg">{req.foodType}</p>
+                                                <p className="text-on-surface-variant text-sm">{req.quantity}</p>
+                                                <p className="text-on-surface-variant text-xs mt-0.5">📍 {req.location?.split(',').slice(0, 2).join(',')}</p>
+                                                {req.volunteerName && (
+                                                    <p className="text-xs text-secondary font-bold mt-1">🚴 Delivered by {req.volunteerName}</p>
+                                                )}
+                                                <p className="text-xs text-on-surface-variant mt-1">
+                                                    Donor: {req.donorName} · <a href={`tel:${req.donorPhone}`} className="hover:underline font-bold" style={{ color: '#003527' }}>{req.donorPhone}</a>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-on-surface-variant text-xs font-bold uppercase mb-1">
+                                                {new Date(req.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </p>
+                                            <span className="text-[10px] font-extrabold px-3 py-1 rounded-full bg-primary-fixed text-primary-container">
+                                                DELIVERED ✓
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </main>
+            {/* Listing Detail Modal */}
+            {selectedDetailListing && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedDetailListing(null)}>
+                    <div className="max-w-2xl w-full bg-surface rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="relative h-64 bg-surface-container-low">
+                            {selectedDetailListing.imageUrls && selectedDetailListing.imageUrls.length > 0 ? (
+                                <div className="flex h-full overflow-x-auto snap-x scrollbar-hide">
+                                    {selectedDetailListing.imageUrls.map((url, i) => (
+                                        <img key={i} src={url} alt={`Food ${i}`} className="h-full w-full object-cover shrink-0 snap-center" />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center text-6xl opacity-10">🍽</div>
+                            )}
+                            <button 
+                                onClick={() => setSelectedDetailListing(null)}
+                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center font-bold text-xl backdrop-blur-md"
+                            >
+                                ×
+                            </button>
+                            {selectedDetailListing.imageUrls?.length > 1 && (
+                                <div className="absolute bottom-4 right-4 bg-black/50 text-white text-[10px] font-bold px-3 py-1 rounded-full backdrop-blur-md">
+                                    {selectedDetailListing.imageUrls.length} Photos · Swipe →
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-8">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-primary mb-2">{selectedDetailListing.foodType}</h2>
+                                    <p className="text-secondary font-bold">👤 {selectedDetailListing.donor?.fullName || 'Anonymous Donor'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-primary">📦 {selectedDetailListing.quantity}</div>
+                                    <p className="text-xs text-on-surface-variant font-medium">Available Quantity</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6 mb-8">
+                                <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/10">
+                                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2">Preparation</p>
+                                    <p className="text-sm font-bold">{new Date(selectedDetailListing.preparationTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                                    <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Expiry</p>
+                                    <p className="text-sm font-bold text-primary">{new Date(selectedDetailListing.expiryTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                <div className="flex items-center gap-3 text-on-surface-variant">
+                                    <span className="text-xl">📍</span>
+                                    <div>
+                                        <p className="text-xs font-bold opacity-50 uppercase tracking-tighter">Pickup Location</p>
+                                        <p className="text-sm font-medium">{selectedDetailListing.location}</p>
+                                    </div>
+                                </div>
+                                {selectedDetailListing.packagingDetails && (
+                                    <div className="flex items-center gap-3 text-on-surface-variant">
+                                        <span className="text-xl">🥡</span>
+                                        <div>
+                                            <p className="text-xs font-bold opacity-50 uppercase tracking-tighter">Packaging Details</p>
+                                            <p className="text-sm font-medium">{selectedDetailListing.packagingDetails}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => {
+                                        setSelectedDetailListing(null);
+                                        handleClaim(selectedDetailListing.id);
+                                    }}
+                                    className="flex-1 py-4 rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform"
+                                >
+                                    Claim This Donation →
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const l = selectedDetailListing;
+                                        setSelectedDetailListing(null);
+                                        if (l.latitude && l.longitude) {
+                                            setSelectedListing(l); // Trigger map route
+                                        }
+                                    }}
+                                    className="px-6 rounded-2xl border-2 border-primary text-primary font-bold hover:bg-primary/5 transition-colors"
+                                >
+                                    🗺 Route
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Listing Detail Modal */}
+            {selectedDetailListing && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedDetailListing(null)}>
+                    <div className="max-w-2xl w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="relative h-64 bg-slate-100">
+                            {selectedDetailListing.imageUrls && selectedDetailListing.imageUrls.length > 0 ? (
+                                <div className="flex h-full overflow-x-auto snap-x scrollbar-hide">
+                                    {selectedDetailListing.imageUrls.map((url, i) => (
+                                        <img key={i} src={url} alt={`Food ${i}`} className="h-full w-full object-cover shrink-0 snap-center" />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center text-6xl opacity-10">🍽</div>
+                            )}
+                            <button 
+                                onClick={() => setSelectedDetailListing(null)}
+                                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center font-bold text-xl backdrop-blur-md"
+                            >
+                                ×
+                            </button>
+                            {selectedDetailListing.imageUrls?.length > 1 && (
+                                <div className="absolute bottom-4 right-4 bg-black/50 text-white text-[10px] font-bold px-3 py-1 rounded-full backdrop-blur-md">
+                                    {selectedDetailListing.imageUrls.length} Photos · Swipe →
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-8">
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 className="text-3xl font-bold text-primary mb-1">{selectedDetailListing.foodType}</h2>
+                                    <p className="text-secondary font-bold">👤 {selectedDetailListing.donorName || selectedDetailListing.donor?.fullName || 'Donor'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-primary">📦 {selectedDetailListing.quantity}</div>
+                                    <p className="text-xs text-on-surface-variant font-medium">Available Quantity</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Preparation</p>
+                                    <p className="text-sm font-bold">{new Date(selectedDetailListing.preparationTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-red-50 border border-red-100">
+                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-1">Expiry</p>
+                                    <p className="text-sm font-bold text-red-600">{new Date(selectedDetailListing.expiryTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                <div className="flex items-center gap-3 text-slate-600">
+                                    <span className="text-xl">📍</span>
+                                    <div>
+                                        <p className="text-xs font-bold opacity-50 uppercase tracking-tighter">Pickup Location</p>
+                                        <p className="text-sm font-medium">{selectedDetailListing.location}</p>
+                                    </div>
+                                </div>
+                                {selectedDetailListing.packagingDetails && (
+                                    <div className="flex items-center gap-3 text-slate-600">
+                                        <span className="text-xl">🥡</span>
+                                        <div>
+                                            <p className="text-xs font-bold opacity-50 uppercase tracking-tighter">Packaging Details</p>
+                                            <p className="text-sm font-medium">{selectedDetailListing.packagingDetails}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => {
+                                        setSelectedDetailListing(null);
+                                        handleClaim(selectedDetailListing.id);
+                                    }}
+                                    className="flex-1 py-4 rounded-2xl impact-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform"
+                                >
+                                    Claim Donation →
+                                </button>
+                                {selectedDetailListing.latitude && (
+                                    <button 
+                                        onClick={() => {
+                                            const l = selectedDetailListing;
+                                            setSelectedDetailListing(null);
+                                            setRouteTarget({
+                                                lat: l.latitude,
+                                                lng: l.longitude,
+                                                donorName: l.donor?.fullName || 'Donor',
+                                                foodType: l.foodType
+                                            });
+                                        }}
+                                        className="px-6 rounded-2xl border-2 border-primary text-primary font-bold hover:bg-primary/5 transition-colors"
+                                    >
+                                        🗺 Route
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
