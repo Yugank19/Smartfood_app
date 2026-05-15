@@ -24,12 +24,12 @@ public class HelloController {
         return helloService.getWelcomeMessage();
     }
 
-    @GetMapping("/food-listings")
+    @GetMapping("/api/food-listings")
     public List<FoodListing> getAvailableFood() {
         return helloService.getAllAvailableFood();
     }
 
-    @PostMapping("/food-listings")
+    @PostMapping("/api/food-listings")
     public FoodListing addFoodListing(@RequestBody FoodListing listing) {
         return helloService.postFoodListing(listing);
     }
