@@ -1,5 +1,7 @@
 package com.myanatomy.sandboxpro.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -13,11 +15,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class DatabaseMigrationRunner implements ApplicationRunner {
 
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseMigrationRunner.class);
+
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Override
     public void run(ApplicationArguments args) {
+        logger.info("Starting database migration check...");
+        
         // Make email column nullable if it exists (legacy migration)
         runSafe("ALTER TABLE users ALTER COLUMN email DROP NOT NULL",
                 "users.email column made nullable (or already was).");
@@ -26,16 +32,17 @@ public class DatabaseMigrationRunner implements ApplicationRunner {
         runSafe("ALTER TABLE users ALTER COLUMN password DROP NOT NULL",
                 "users.password column made nullable (or already was).");
 
-        System.out.println("[Migration] Supabase PostgreSQL schema check complete.");
+        logger.info("Supabase PostgreSQL schema check complete.");
     }
 
     private void runSafe(String sql, String successMsg) {
         try {
+            logger.debug("Executing migration: {}", sql);
             jdbcTemplate.execute(sql);
-            System.out.println("[Migration] " + successMsg);
+            logger.info(successMsg);
         } catch (Exception e) {
             // Column may not exist or already be nullable — safe to ignore
-            System.out.println("[Migration] Skipped (not needed): " + e.getMessage().split("\n")[0]);
+            logger.warn("Migration skipped (safe): {} - {}", sql, e.getMessage());
         }
     }
 }
