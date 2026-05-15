@@ -76,6 +76,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/food/animal-feed").hasAnyRole("ANIMAL_CARE", "ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/analytics/public").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/hello").permitAll()
+                .requestMatchers(HttpMethod.GET, "/").permitAll()
                 // WebSocket endpoint
                 .requestMatchers("/ws/**").permitAll()
                 // Profile - any authenticated user

@@ -8,14 +8,18 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
 @CrossOrigin(origins = "*") // For local development with React
 public class HelloController {
 
     @Autowired
     private HelloService helloService;
 
-    @GetMapping("/hello")
+    @GetMapping("/")
+    public String index() {
+        return "MealBridge Backend is LIVE and connected to Supabase!";
+    }
+
+    @GetMapping("/api/hello")
     public String sayHello() {
         return helloService.getWelcomeMessage();
     }
