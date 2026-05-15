@@ -1,7 +1,7 @@
 # Smart Food Redistribution Platform — Working Features
 
 **Project:** MealBridge / The Living Network  
-**Stack:** Java 17 + Spring Boot 3.2.4 (Backend) · React 18 (Frontend) · MySQL · Leaflet Maps · Firebase Auth  
+**Stack:** Java 17 + Spring Boot 3.2.4 (Backend) · React 18 (Frontend) · PostgreSQL · Leaflet Maps · Firebase Auth  
 **Last Updated:** April 2026
 
 ---
@@ -152,7 +152,7 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | Java 17, Spring Boot 3.2.4, Spring Security, JWT |
-| Database | MySQL with Hibernate auto-DDL |
+| Database | PostgreSQL (Supabase) with Hibernate auto-DDL |
 | Real-time | WebSocket (STOMP + SockJS) |
 | Frontend | React 18, React Router v6, Axios, Tailwind CSS (CDN) |
 | Maps | Leaflet + react-leaflet v4, OpenStreetMap, Esri Satellite |
