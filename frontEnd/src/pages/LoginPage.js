@@ -153,14 +153,14 @@ const LoginPage = () => {
 
                     <div className="flex items-center justify-center gap-3 py-3 px-4 bg-surface-container-lowest border border-outline-variant/10 rounded-xl">
                         <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
-                        <span className="text-sm font-medium text-on-surface-variant">PIN-protected · Supabase verified · SSL encrypted</span>
+                        <span className="text-sm font-medium text-on-surface-variant">PIN-protected · Phone verified · SSL encrypted</span>
                     </div>
 
                     <footer className="mt-12 text-center">
                         <p className="text-on-surface-variant font-medium">
                             Don't have an account?{' '}
                             <Link to="/register" className="text-secondary font-bold hover:underline ml-1" style={{ textDecoration: 'none' }}>
-                                Register with Supabase OTP
+                                Register with Phone OTP
                             </Link>
                         </p>
                     </footer>
