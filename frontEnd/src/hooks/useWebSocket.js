@@ -1,7 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+
+// Use native WebSocket — avoids the sockjs-client/eventsource bundler bug.
+const wsUrl = () => {
+    const base = (typeof API_BASE_URL === 'string' ? API_BASE_URL : '')
+        .replace(/^http/, 'ws');
+    return `${base}/ws/websocket`;
+};
 
 /**
  * Custom hook for WebSocket/STOMP connection to the backend.
@@ -14,7 +20,7 @@ const useWebSocket = (topics = [], onMessage) => {
 
     const connect = useCallback(() => {
         const client = new Client({
-            webSocketFactory: () => new SockJS(`${API_BASE_URL}/ws`),
+            brokerURL: wsUrl(),
             reconnectDelay: 5000,
             onConnect: () => {
                 topics.forEach(topic => {

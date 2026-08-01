@@ -231,6 +231,14 @@ const AppContent = () => {
     const [userToken, setUserToken] = useState(sessionStorage.getItem('token'));
     const navigate = useNavigate();
 
+
+        useEffect(() => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.tailwindcss.com";
+        script.async = true;
+        document.head.appendChild(script);
+    }, []);
+    
     useEffect(() => {
         const interval = setInterval(() => {
             const phone = sessionStorage.getItem('phone');

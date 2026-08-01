@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   /* Core Palette */
   --primary: #003527;
@@ -79,8 +83,10 @@ h1, h2, h3, h4, .font-headline {
 }
 
 /* Design System Utilities */
-.impact-gradient {
+.impact-gradient,
+.primary-gradient {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
+  color: #ffffff;
 }
 
 .text-gradient {

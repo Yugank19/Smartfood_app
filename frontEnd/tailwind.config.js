@@ -1,0 +1,72 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "surface-container-highest": "#d5e3fd",
+        "background": "#f8f9ff",
+        "primary": "#003527",
+        "surface-container-high": "#dde9ff",
+        "secondary": "#416900",
+        "on-primary": "#ffffff",
+        "surface-tint": "#2b6954",
+        "surface": "#f8f9ff",
+        "on-background": "#0d1c2f",
+        "surface-bright": "#f8f9ff",
+        "on-error": "#ffffff",
+        "outline": "#707974",
+        "surface-variant": "#d5e3fd",
+        "outline-variant": "#bfc9c3",
+        "on-secondary-container": "#457000",
+        "on-primary-fixed-variant": "#0b513d",
+        "on-error-container": "#93000a",
+        "on-surface": "#0d1c2f",
+        "on-tertiary-fixed": "#002113",
+        "on-tertiary": "#ffffff",
+        "primary-fixed": "#b0f0d6",
+        "primary-container": "#064e3b",
+        "inverse-surface": "#233144",
+        "on-surface-variant": "#404944",
+        "tertiary": "#003623",
+        "on-primary-container": "#80bea6",
+        "secondary-fixed-dim": "#91db2a",
+        "error": "#ba1a1a",
+        "on-secondary-fixed-variant": "#304f00",
+        "on-tertiary-fixed-variant": "#005236",
+        "on-secondary-fixed": "#102000",
+        "tertiary-container": "#004f34",
+        "tertiary-fixed": "#6ffbbe",
+        "on-secondary": "#ffffff",
+        "error-container": "#ffdad6",
+        "secondary-container": "#acf847",
+        "on-primary-fixed": "#002117",
+        "inverse-primary": "#95d3ba",
+        "inverse-on-surface": "#ebf1ff",
+        "tertiary-fixed-dim": "#4edea3",
+        "surface-dim": "#ccdbf4",
+        "on-tertiary-container": "#31c98f",
+        "surface-container-low": "#eff4ff",
+        "primary-fixed-dim": "#95d3ba",
+        "surface-container-lowest": "#ffffff",
+        "secondary-fixed": "#acf847",
+        "surface-container": "#e6eeff",
+        "on-secondary-fixed-variant": "#304f00",
+        "on-primary-container": "#80bea6",
+      },
+      borderRadius: {
+        DEFAULT: "0.25rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        full: "9999px"
+      },
+      fontFamily: {
+        headline: ["Manrope"],
+        body: ["Inter"],
+        label: ["Inter"]
+      }
+    }
+  },
+  plugins: []
+};

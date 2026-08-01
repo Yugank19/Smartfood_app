@@ -85,6 +85,38 @@ public class ChatService {
                 .orElseThrow(() -> new RuntimeException("Chat room not found for pickup " + pickupId));
     }
 
+    /**
+     * WhatsApp-style "Delete for everyone": marks message as deleted,
+     * clears content, and broadcasts the deletion to all room participants.
+     * Only the original sender can delete their own message.
+     */
+    @Transactional
+    public ChatMessage deleteMessage(Long messageId, String requesterPhone) {
+        ChatMessage msg = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        if (!msg.getSender().getPhone().equals(requesterPhone)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "You can only delete your own messages");
+        }
+
+        msg.setDeleted(true);
+        msg.setMessage("This message was deleted");
+        ChatMessage saved = chatMessageRepository.save(msg);
+
+        // Broadcast deletion event to all room participants
+        Long roomId = msg.getChatRoom().getId();
+        messagingTemplate.convertAndSend("/topic/chat/" + roomId, Map.of(
+            "id", saved.getId(),
+            "type", "DELETED",
+            "message", "This message was deleted",
+            "senderPhone", requesterPhone,
+            "sentAt", saved.getSentAt().toString()
+        ));
+
+        return saved;
+    }
+
     private void sendSystemMessage(Long roomId, String text) {
         messagingTemplate.convertAndSend("/topic/chat/" + roomId, Map.of(
             "message", text,

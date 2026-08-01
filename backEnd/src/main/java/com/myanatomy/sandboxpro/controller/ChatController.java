@@ -87,4 +87,22 @@ public class ChatController {
             chatService.sendMessage(roomId, phone, message);
         }
     }
+
+    /**
+     * WhatsApp-style "Delete for everyone".
+     * Only the original sender can call this.
+     * Broadcasts a DELETED event to all room participants via WebSocket.
+     */
+    @DeleteMapping("/message/{messageId}")
+    public ResponseEntity<?> deleteMessage(@PathVariable Long messageId) {
+        String phone = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            chatService.deleteMessage(messageId, phone);
+            return ResponseEntity.ok(Map.of("message", "Message deleted"));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(404).body(Map.of("message", "Message not found"));
+        }
+    }
 }

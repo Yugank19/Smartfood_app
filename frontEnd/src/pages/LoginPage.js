@@ -138,8 +138,16 @@ const LoginPage = () => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full primary-gradient text-white font-extrabold py-4 rounded-xl shadow-xl hover:shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all duration-200"
-                            style={{ fontFamily: 'Manrope, sans-serif', opacity: loading ? 0.7 : 1 }}
+                            className="w-full impact-gradient font-extrabold py-4 rounded-xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                            style={{
+                                fontFamily: 'Manrope, sans-serif',
+                                color: '#ffffff',
+                                opacity: loading ? 0.7 : 1,
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                border: 'none',
+                                fontSize: '1rem',
+                                letterSpacing: '0.02em',
+                            }}
                         >
                             {loading ? 'Signing in...' : 'Sign In to Dashboard'}
                         </button>

@@ -45,6 +45,10 @@ public class ChatMessage {
     @Enumerated(EnumType.STRING)
     private MessageType type = MessageType.TEXT;
 
+    // WhatsApp-style delete: message content is cleared for all participants
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean deleted = false;
+
     public enum MessageType {
         TEXT, IMAGE, SYSTEM
     }
